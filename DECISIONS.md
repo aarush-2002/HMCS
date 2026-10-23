@@ -91,4 +91,42 @@ All business numbers are centralized in `/src/shared/policy.ts`:
 | Admin | admin@hmcs.edu | admin123 |
 | Warden 1 | warden1@hmcs.edu | warden123 |
 | Warden 2 | warden2@hmcs.edu | warden123 |
-| Students 1-15 | student1@hmcs.edu ... student15@hmcs.edu | student123 |
+| Students 1-50 | student1@hmcs.edu ... student50@hmcs.edu | student123 |
+
+## Open Decisions (PRD §14) — Status
+
+The following decisions from the original PRD remain open for pilot review:
+
+| # | Decision | Current Default | Pilot Action Needed |
+|---|---|---|---|
+| 1 | What counts as a day or week? | Calendar day/week in hostel timezone | Validate with actual usage patterns |
+| 2 | Does promoted complaint consume emergency allowance? | No | Monitor for gaming |
+| 3 | When does 24h emergency deadline start after promotion? | From promotion timestamp | Confirm fairness with wardens |
+| 4 | What counts as "solved" for deadline penalty? | Warden marks resolved | Review with student body |
+| 5 | How is −1 star penalty represented alongside 1-3 star rating? | Separate score | Confirm clarity with wardens |
+| 6 | Who can upvote and confirm resolution? | All hostel students | Monitor for noise |
+| 7 | What happens if 3 "solved" votes not received in 24h? | Returns to In Progress | Review frequency |
+| 8 | What happens when students vote "not solved"? | 3 votes → Reopened | Review threshold |
+| 9 | Can wardens reject/merge/reclassify complaints? | Admin only | Consider warden powers |
+| 10 | Can complaints be reassigned between wardens? | Admin only | Define deadline ownership |
+| 11 | Are complaints/ratings anonymous to other students? | Yes (hidden by default) | Confirm with privacy team |
+| 12 | Authentication method? | Email + password | Consider SSO for institution |
+| 13 | Notification channels? | In-app only | Add email/SMS for critical |
+| 14 | Photo formats, size limits, retention? | JPEG/PNG/WebP, 5MB, indefinite | Define retention policy |
+| 15 | Does "removed" mean hidden or deleted? | Hidden from active feed, retained in history | Confirm with legal |
+
+## Recommended Next Steps for Pilot
+
+1. **Week 1-2**: Deploy to staging with 1 hostel, 2 wardens, 50 students
+2. **Week 3-4**: Collect feedback on UX, identify pain points
+3. **Week 5-6**: Address critical bugs, adjust policies based on data
+4. **Week 7-8**: Expand to 2-3 hostels, monitor at scale
+5. **Week 9-12**: Full rollout with monitoring and support
+
+### Success Metrics for Pilot
+- >80% of complaints acknowledged within 24 hours
+- >60% of normal complaints resolved within 72 hours
+- >80% of emergency complaints resolved within 24 hours
+- >70% of resolved complaints receive student confirmation
+- Average student rating ≥ 2.0/3.0
+- <5% of complaints misclassified or rejected

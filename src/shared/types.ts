@@ -108,6 +108,8 @@ export interface AuditEvent {
   before: Record<string, unknown> | null;
   after: Record<string, unknown> | null;
   createdAt: string;
+  reason?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface Notification {
@@ -116,6 +118,7 @@ export interface Notification {
   message: string;
   read: boolean;
   createdAt: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface Complaint {
