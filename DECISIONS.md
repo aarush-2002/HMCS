@@ -4,6 +4,19 @@ This document records the policy defaults and design decisions made for the HMCS
 
 ## Resolved Decisions
 
+### 0. Penalty Score Separation
+**Decision:** Deadline penalties (−1 point each) are tracked as a SEPARATE score from the student star-rating average.
+- Star ratings: 1-3 stars, averaged per warden, shown as "X.X/3.0"
+- Penalty points: Count of missed deadlines, shown separately
+- The two scores are never combined or subtracted from each other
+- The warden performance page shows both with plain-language explanations
+
+### 0b. Penalty Idempotency
+**Decision:** The penalty scheduler is idempotent. A penalty is uniquely identified by (complaintId, deadlineType, deadlineAt). Running the scheduler multiple times or on multiple instances produces exactly one penalty per qualifying event.
+
+### 0c. Promotion and Penalties
+**Decision:** A penalty issued for a normal deadline stays on record even after promotion to emergency. The new 24h emergency deadline can create its own separate penalty if missed. This means a single complaint can have at most 2 penalties (one for normal, one for emergency).
+
 ### 1. Day/Week Definition
 **Decision:** Calendar day/week in the hostel's configured timezone (Asia/Kolkata).
 - "Day" resets at midnight local time.

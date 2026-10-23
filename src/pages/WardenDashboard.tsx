@@ -1,14 +1,16 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
-  Complaint, ComplaintStatus, Priority,
-  isOverdue,
+  Complaint, ComplaintStatus, Priority, Category, VoteType,
+  isOverdue, getTimeRemaining,
 } from '../shared/types';
 import { POLICY } from '../shared/policy';
 import {
-  getStore, updateComplaint, addNotification, addAuditEvent,
-  getUpvotesForComplaint, getRatingsForWarden, getPenaltiesForWarden,
-  getAuditForComplaint,
+  getStore, updateComplaintStatus, getUpvotesForComplaint,
+  getResolutionVotesForComplaint, addResolutionVote, addWardenRating,
+  getRatingsForWarden, getPenaltiesForWarden, getAuditForComplaint,
+  getUserById, getNotificationsForUser, markNotificationRead,
+  runSchedulers,
 } from '../store/data';
 import {
   Button, Card, Badge, StatusBadge, PriorityBadge, Tabs, Input, Textarea,
@@ -18,44 +20,67 @@ import { v4 as uuid } from 'uuid';
 import {
   Shield, LogOut, Building2, Clock, AlertTriangle, CheckCircle,
   ArrowLeft, BarChart3, Star, List, Eye, Edit3, TrendingDown,
-  Users, Search, Bell, Menu, X,
+  Users, Search, Bell, Menu, X, Filter, ArrowUpDown, Zap,
+  ThumbsUp, ThumbsDown, Info,
 } from 'lucide-react';
 
 type View = 'queue' | 'detail' | 'overdue' | 'performance' | 'notifications';
+type SortOption = 'deadline' | 'priority' | 'newest';
 
 export default function WardenDashboard() {
   const { user, logout } = useAuth();
   const [view, setView] = useState<View>('queue');
   const [selectedComplaint, setSelectedComplaint] = useState<string | null>(null);
   const [, setRefresh] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<ComplaintStatus | 'ALL'>('ALL');
   const [filterPriority, setFilterPriority] = useState<Priority | 'ALL'>('ALL');
+  const [filterCategory, setFilterCategory] = useState<Category | 'ALL'>('ALL');
+  const [sortBy, setSortBy] = useState<SortOption>('deadline');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (!user) return null;
   const store = getStore();
   const forceRefresh = () => setRefresh(r => r + 1);
 
+  // Run schedulers on mount
+  useEffect(() => {
+    runSchedulers();
+  }, []);
+
   const myComplaints = useMemo(() => {
     let list = store.complaints.filter(c => c.hostelId === user.hostelId && c.assignedWardenId === user.id);
+    
     if (filterStatus !== 'ALL') list = list.filter(c => c.status === filterStatus);
     if (filterPriority !== 'ALL') list = list.filter(c => c.priority === filterPriority);
+    if (filterCategory !== 'ALL') list = list.filter(c => c.category === filterCategory);
+    
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      list = list.filter(c => c.title.toLowerCase().includes(q));
+      list = list.filter(c => c.title.toLowerCase().includes(q) || c.description.toLowerCase().includes(q));
     }
-    return list.sort((a, b) => {
-      if (a.priority === Priority.EMERGENCY && b.priority !== Priority.EMERGENCY) return -1;
-      if (b.priority === Priority.EMERGENCY && a.priority !== Priority.EMERGENCY) return 1;
-      const aOverdue = isOverdue(a) ? 0 : 1;
-      const bOverdue = isOverdue(b) ? 0 : 1;
-      if (aOverdue !== bOverdue) return aOverdue - bOverdue;
-      return new Date(a.deadlineAt).getTime() - new Date(b.deadlineAt).getTime();
-    });
-  }, [store.complaints, filterStatus, filterPriority, searchQuery, user]);
+
+    // Sort
+    switch (sortBy) {
+      case 'priority':
+        list = list.sort((a, b) => {
+          if (a.priority === Priority.EMERGENCY && b.priority !== Priority.EMERGENCY) return -1;
+          if (b.priority === Priority.EMERGENCY && a.priority !== Priority.EMERGENCY) return 1;
+          return 0;
+        });
+        break;
+      case 'newest':
+        list = list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        break;
+      default: // deadline
+        list = list.sort((a, b) => new Date(a.deadlineAt).getTime() - new Date(b.deadlineAt).getTime());
+    }
+
+    return list;
+  }, [store.complaints, filterStatus, filterPriority, filterCategory, sortBy, searchQuery, user]);
 
   const overdueComplaints = myComplaints.filter(c => isOverdue(c));
+  const awaitingConfirmation = myComplaints.filter(c => c.status === ComplaintStatus.MARKED_RESOLVED);
   const ratings = getRatingsForWarden(user.id);
   const penalties = getPenaltiesForWarden(user.id);
   const avgRating = ratings.length > 0 ? ratings.reduce((sum, r) => sum + r.stars, 0) / ratings.length : 0;
@@ -75,7 +100,7 @@ export default function WardenDashboard() {
 
   return (
     <div className="min-h-screen bg-[var(--stone-50)] flex">
-      {/* Sidebar - Desktop */}
+      {/* Sidebar Desktop */}
       <aside className="hidden md:flex w-64 bg-white border-r border-[var(--stone-200)] flex-col shrink-0">
         <div className="p-5 border-b border-[var(--stone-200)]">
           <div className="flex items-center gap-3">
@@ -184,15 +209,19 @@ export default function WardenDashboard() {
         </header>
 
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-5xl mx-auto">
             {view === 'queue' && (
               <QueueView
                 complaints={myComplaints}
                 filterStatus={filterStatus}
                 filterPriority={filterPriority}
+                filterCategory={filterCategory}
+                sortBy={sortBy}
+                searchQuery={searchQuery}
                 setFilterStatus={setFilterStatus}
                 setFilterPriority={setFilterPriority}
-                searchQuery={searchQuery}
+                setFilterCategory={setFilterCategory}
+                setSortBy={setSortBy}
                 setSearchQuery={setSearchQuery}
                 onOpenDetail={openDetail}
               />
@@ -207,9 +236,9 @@ export default function WardenDashboard() {
             )}
             {view === 'overdue' && <OverdueView complaints={overdueComplaints} onOpenDetail={openDetail} />}
             {view === 'performance' && (
-              <PerformanceView ratings={ratings} penalties={penalties} avgRating={avgRating} complaints={myComplaints} />
+              <PerformanceView ratings={ratings} penalties={penalties} avgRating={avgRating} complaints={myComplaints} wardenId={user.id} />
             )}
-            {view === 'notifications' && <NotificationsView userId={user.id} />}
+            {view === 'notifications' && <NotificationsView userId={user.id} onRefresh={forceRefresh} />}
           </div>
         </main>
       </div>
@@ -218,33 +247,66 @@ export default function WardenDashboard() {
 }
 
 // ─── Queue View ────────────────────────────────────────────────────────────────
-function QueueView({ complaints, filterStatus, filterPriority, setFilterStatus, setFilterPriority, searchQuery, setSearchQuery, onOpenDetail }: any) {
+function QueueView({ complaints, filterStatus, filterPriority, filterCategory, sortBy, searchQuery, setFilterStatus, setFilterPriority, setFilterCategory, setSortBy, setSearchQuery, onOpenDetail }: any) {
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-bold text-[var(--stone-900)] font-heading">Complaint Queue</h2>
 
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--stone-400)]" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-[var(--stone-300)] text-sm bg-white focus:border-[var(--accent-600)] focus:ring-2 focus:ring-[var(--accent-100)] outline-none"
-          />
+      {/* Filters */}
+      <Card>
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--stone-400)]" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search..."
+                className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-[var(--stone-300)] text-sm bg-white focus:border-[var(--accent-600)] focus:ring-2 focus:ring-[var(--accent-100)] outline-none"
+              />
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="px-3 py-2 rounded-lg border border-[var(--stone-300)] text-sm bg-white">
+              <option value="ALL">All Statuses</option>
+              {Object.values(ComplaintStatus).map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+            </select>
+            <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)} className="px-3 py-2 rounded-lg border border-[var(--stone-300)] text-sm bg-white">
+              <option value="ALL">All Priorities</option>
+              <option value={Priority.NORMAL}>Normal</option>
+              <option value={Priority.EMERGENCY}>Emergency</option>
+            </select>
+            <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="px-3 py-2 rounded-lg border border-[var(--stone-300)] text-sm bg-white">
+              <option value="ALL">All Categories</option>
+              {Object.values(Category).map(c => <option key={c} value={c}>{c.charAt(0) + c.slice(1).toLowerCase()}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-2 pt-3 border-t border-[var(--stone-100)]">
+            <ArrowUpDown className="w-4 h-4 text-[var(--stone-500)]" />
+            <span className="text-sm text-[var(--stone-600)]">Sort:</span>
+            <div className="flex gap-1">
+              {[
+                { key: 'deadline', label: 'Deadline' },
+                { key: 'priority', label: 'Priority' },
+                { key: 'newest', label: 'Newest' },
+              ].map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => setSortBy(opt.key)}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                    sortBy === opt.key ? 'bg-[var(--accent-100)] text-[var(--accent-800)]' : 'text-[var(--stone-600)] hover:bg-[var(--stone-100)]'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="px-3 py-2.5 rounded-lg border border-[var(--stone-300)] text-sm bg-white">
-          <option value="ALL">All Statuses</option>
-          {Object.values(ComplaintStatus).map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
-        </select>
-        <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)} className="px-3 py-2.5 rounded-lg border border-[var(--stone-300)] text-sm bg-white">
-          <option value="ALL">All Priorities</option>
-          <option value={Priority.NORMAL}>Normal</option>
-          <option value={Priority.EMERGENCY}>Emergency</option>
-        </select>
-      </div>
+      </Card>
 
+      {/* Complaint List */}
       {complaints.length === 0 ? (
         <EmptyState icon={<CheckCircle className="w-8 h-8" />} title="No complaints" description="All caught up!" />
       ) : (
@@ -252,6 +314,7 @@ function QueueView({ complaints, filterStatus, filterPriority, setFilterStatus, 
           {complaints.map((c: Complaint) => {
             const upvoteCount = getUpvotesForComplaint(c.id).length;
             const overdue = isOverdue(c);
+            const submitter = getUserById(c.submitterId);
             return (
               <Card key={c.id} hover onClick={() => onOpenDetail(c.id)} className={overdue ? 'border-red-200 bg-red-50/30' : ''}>
                 <div className="flex items-start justify-between gap-3">
@@ -267,6 +330,7 @@ function QueueView({ complaints, filterStatus, filterPriority, setFilterStatus, 
                       <Countdown deadlineAt={c.deadlineAt} compact />
                       <span className="flex items-center gap-1"><Users className="w-3 h-3" />{upvoteCount}</span>
                       <span>{c.category}</span>
+                      {submitter && <span>by {submitter.name}</span>}
                     </div>
                   </div>
                   <Eye className="w-5 h-5 text-[var(--stone-400)] shrink-0" />
@@ -286,32 +350,48 @@ function WardenComplaintDetail({ complaintId, wardenId, onBack, onRefresh }: any
   const complaint = store.complaints.find((c: Complaint) => c.id === complaintId);
   const upvotes = getUpvotesForComplaint(complaintId);
   const auditEvents = getAuditForComplaint(complaintId);
+  const resVotes = complaint ? getResolutionVotesForComplaint(complaintId, complaint.resolutionRound) : [];
+  const solvedVotes = resVotes.filter(v => v.voteType === VoteType.SOLVED).length;
+  const notSolvedVotes = resVotes.filter(v => v.voteType === VoteType.NOT_SOLVED).length;
+  
   const [newStatus, setNewStatus] = useState<ComplaintStatus>(complaint?.status || ComplaintStatus.SUBMITTED);
   const [resolutionNote, setResolutionNote] = useState('');
   const [showUpdate, setShowUpdate] = useState(false);
+  const [error, setError] = useState('');
 
   if (!complaint) return <EmptyState icon={<AlertTriangle className="w-8 h-8" />} title="Not found" />;
   const overdue = isOverdue(complaint);
+  const submitter = getUserById(complaint.submitterId);
+
+  // Get valid next statuses
+  const validNextStatuses = useMemo(() => {
+    const transitions: Record<ComplaintStatus, ComplaintStatus[]> = {
+      [ComplaintStatus.SUBMITTED]: [ComplaintStatus.ACKNOWLEDGED, ComplaintStatus.REJECTED],
+      [ComplaintStatus.ACKNOWLEDGED]: [ComplaintStatus.IN_PROGRESS, ComplaintStatus.REJECTED],
+      [ComplaintStatus.IN_PROGRESS]: [ComplaintStatus.MARKED_RESOLVED, ComplaintStatus.REJECTED],
+      [ComplaintStatus.MARKED_RESOLVED]: [],
+      [ComplaintStatus.RESOLVED]: [],
+      [ComplaintStatus.REOPENED]: [ComplaintStatus.IN_PROGRESS],
+      [ComplaintStatus.CLOSED]: [],
+      [ComplaintStatus.REJECTED]: [],
+    };
+    return transitions[complaint.status] || [];
+  }, [complaint.status]);
 
   const handleStatusUpdate = () => {
-    const updates: Partial<Complaint> = { status: newStatus };
-    if (newStatus === ComplaintStatus.MARKED_RESOLVED) {
-      updates.markedResolvedAt = new Date().toISOString();
-      updates.resolutionNote = resolutionNote || 'Issue addressed.';
-      updates.confirmationWindowStart = new Date().toISOString();
-      addNotification({
-        id: uuid(), userId: complaint.submitterId,
-        message: `Your complaint "${complaint.title}" has been marked resolved.`,
-        read: false, createdAt: new Date().toISOString(),
-      });
+    setError('');
+    const result = updateComplaintStatus(
+      complaintId,
+      newStatus,
+      wardenId,
+      newStatus === ComplaintStatus.MARKED_RESOLVED ? resolutionNote : undefined
+    );
+    
+    if (!result.success) {
+      setError(result.error || 'Update failed');
+      return;
     }
-    updateComplaint(complaintId, updates);
-    addAuditEvent({
-      id: uuid(), actorId: wardenId, action: 'STATUS_CHANGED',
-      entityType: 'Complaint', entityId: complaintId,
-      before: { status: complaint.status }, after: { status: newStatus },
-      createdAt: new Date().toISOString(),
-    });
+    
     setShowUpdate(false);
     showToast('success', 'Status updated');
     onRefresh();
@@ -331,7 +411,7 @@ function WardenComplaintDetail({ complaintId, wardenId, onBack, onRefresh }: any
             {overdue && <Badge variant="danger" icon={<AlertTriangle className="w-3 h-3" />}>Overdue</Badge>}
           </div>
           <h2 className="text-xl font-bold text-[var(--stone-900)] font-heading">{complaint.title}</h2>
-          <p className="text-xs text-[var(--stone-500)] mt-1">{complaint.id} • {complaint.category}</p>
+          <p className="text-xs text-[var(--stone-500)] mt-1">{complaint.id} • {complaint.category} • Filed by: {submitter?.name || 'Unknown'}</p>
         </div>
 
         <div className="p-5 sm:p-6 space-y-5">
@@ -363,8 +443,31 @@ function WardenComplaintDetail({ complaintId, wardenId, onBack, onRefresh }: any
             </div>
           )}
 
+          {/* Resolution Confirmation Status */}
+          {complaint.status === ComplaintStatus.MARKED_RESOLVED && complaint.confirmationWindowEnd && (
+            <div className="bg-[var(--accent-50)] border border-[var(--accent-200)] rounded-xl p-4">
+              <h3 className="text-sm font-medium text-[var(--accent-800)] mb-2 flex items-center gap-2">
+                <CheckCircle className="w-4 h-4" /> Resolution Confirmation
+              </h3>
+              <div className="grid grid-cols-2 gap-4 mb-3">
+                <div>
+                  <p className="text-xs text-[var(--stone-600)]">Solved</p>
+                  <p className="text-lg font-bold text-green-700">{solvedVotes}/{POLICY.resolutionVotesRequired}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[var(--stone-600)]">Not Solved</p>
+                  <p className="text-lg font-bold text-red-700">{notSolvedVotes}/{POLICY.resolutionVotesRequired}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-[var(--accent-700)]">
+                <Clock className="w-4 h-4" />
+                <span>Window closes: <Countdown deadlineAt={complaint.confirmationWindowEnd} /></span>
+              </div>
+            </div>
+          )}
+
           {/* Status Update */}
-          {complaint.status !== ComplaintStatus.RESOLVED && complaint.status !== ComplaintStatus.CLOSED && (
+          {validNextStatuses.length > 0 && (
             <div className="border border-[var(--stone-200)] rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium text-[var(--stone-700)] flex items-center gap-2">
@@ -376,19 +479,38 @@ function WardenComplaintDetail({ complaintId, wardenId, onBack, onRefresh }: any
               </div>
               {showUpdate && (
                 <div className="space-y-3">
-                  <Select
-                    value={newStatus}
-                    onChange={v => setNewStatus(v as ComplaintStatus)}
-                    options={Object.values(ComplaintStatus).filter(s => s !== ComplaintStatus.RESOLVED && s !== ComplaintStatus.CLOSED).map(s => ({ value: s, label: s.replace(/_/g, ' ') }))}
-                  />
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--stone-700)] mb-2">Valid next statuses:</label>
+                    <div className="flex flex-wrap gap-2">
+                      {validNextStatuses.map(status => (
+                        <button
+                          key={status}
+                          onClick={() => setNewStatus(status)}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                            newStatus === status ? 'bg-[var(--accent-100)] text-[var(--accent-800)] border-2 border-[var(--accent-300)]' : 'bg-[var(--stone-100)] text-[var(--stone-700)] border-2 border-transparent hover:border-[var(--stone-300)]'
+                          }`}
+                        >
+                          {status.replace(/_/g, ' ')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   {newStatus === ComplaintStatus.MARKED_RESOLVED && (
                     <Textarea
-                      label="Resolution Note"
+                      label="Resolution Note (min 10 chars)"
                       value={resolutionNote}
                       onChange={e => setResolutionNote(e.target.value)}
                       placeholder="What was done to resolve this?"
                       rows={3}
+                      showCount
+                      maxLength={500}
                     />
+                  )}
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4" />
+                      {error}
+                    </div>
                   )}
                   <Button onClick={handleStatusUpdate} size="sm">Save Update</Button>
                 </div>
@@ -396,7 +518,7 @@ function WardenComplaintDetail({ complaintId, wardenId, onBack, onRefresh }: any
             </div>
           )}
 
-          {/* Audit */}
+          {/* Timeline */}
           <div>
             <h3 className="text-sm font-medium text-[var(--stone-700)] mb-3">Activity Log</h3>
             <div className="space-y-2">
@@ -428,17 +550,20 @@ function OverdueView({ complaints, onOpenDetail }: any) {
         <EmptyState icon={<CheckCircle className="w-8 h-8" />} title="No overdue complaints" description="Great work keeping everything on time!" />
       ) : (
         <div className="space-y-3">
-          {complaints.map((c: Complaint) => (
-            <Card key={c.id} hover onClick={() => onOpenDetail(c.id)} className="border-red-200">
-              <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                <PriorityBadge priority={c.priority} />
-                <StatusBadge status={c.status} />
-                <Badge variant="danger" icon={<AlertTriangle className="w-3 h-3" />}>Overdue</Badge>
-              </div>
-              <h3 className="font-semibold text-[var(--stone-900)] text-sm">{c.title}</h3>
-              <p className="text-xs text-[var(--stone-500)] mt-1">Deadline was: {new Date(c.deadlineAt).toLocaleString()}</p>
-            </Card>
-          ))}
+          {complaints.map((c: Complaint) => {
+            const overdueBy = Math.floor((Date.now() - new Date(c.deadlineAt).getTime()) / 3600000);
+            return (
+              <Card key={c.id} hover onClick={() => onOpenDetail(c.id)} className="border-red-200">
+                <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                  <PriorityBadge priority={c.priority} />
+                  <StatusBadge status={c.status} />
+                  <Badge variant="danger" icon={<AlertTriangle className="w-3 h-3" />}>Overdue by {overdueBy}h</Badge>
+                </div>
+                <h3 className="font-semibold text-[var(--stone-900)] text-sm">{c.title}</h3>
+                <p className="text-xs text-[var(--stone-500)] mt-1">Deadline was: {new Date(c.deadlineAt).toLocaleString()}</p>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>
@@ -446,14 +571,27 @@ function OverdueView({ complaints, onOpenDetail }: any) {
 }
 
 // ─── Performance View ──────────────────────────────────────────────────────────
-function PerformanceView({ ratings, penalties, avgRating, complaints }: any) {
+function PerformanceView({ ratings, penalties, avgRating, complaints, wardenId }: any) {
   const resolved = complaints.filter((c: Complaint) => c.status === ComplaintStatus.RESOLVED);
   const resolvedOnTime = resolved.filter((c: Complaint) => c.markedResolvedAt && new Date(c.markedResolvedAt) <= new Date(c.deadlineAt)).length;
+  const normalComplaints = complaints.filter((c: Complaint) => c.priority === Priority.NORMAL);
+  const emergencyComplaints = complaints.filter((c: Complaint) => c.priority === Priority.EMERGENCY);
+  const normalOnTime = normalComplaints.filter((c: Complaint) => c.markedResolvedAt && new Date(c.markedResolvedAt) <= new Date(c.deadlineAt)).length;
+  const emergencyOnTime = emergencyComplaints.filter((c: Complaint) => c.markedResolvedAt && new Date(c.markedResolvedAt) <= new Date(c.deadlineAt)).length;
+
+  // Median resolution time
+  const resolutionTimes = resolved
+    .filter((c: Complaint) => c.markedResolvedAt)
+    .map((c: Complaint) => new Date(c.markedResolvedAt!).getTime() - new Date(c.createdAt).getTime())
+    .sort((a: number, b: number) => a - b);
+  const medianTime = resolutionTimes.length > 0 ? resolutionTimes[Math.floor(resolutionTimes.length / 2)] : 0;
+  const medianHours = Math.floor(medianTime / 3600000);
 
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-[var(--stone-900)] font-heading">Performance</h2>
 
+      {/* Score Cards */}
       <div className="grid sm:grid-cols-3 gap-4">
         <Card className="text-center">
           <div className="flex items-center justify-center gap-1 mb-2">
@@ -464,8 +602,8 @@ function PerformanceView({ ratings, penalties, avgRating, complaints }: any) {
         </Card>
         <Card className="text-center">
           <p className="text-2xl font-bold text-red-600 font-heading">{penalties.length}</p>
-          <p className="text-xs text-[var(--stone-500)]">Deadline Penalties</p>
-          <p className="text-xs text-[var(--stone-400)] mt-0.5">Each = −1★</p>
+          <p className="text-xs text-[var(--stone-500)]">Penalty Points</p>
+          <p className="text-xs text-[var(--stone-400)] mt-0.5">Separate from star rating</p>
         </Card>
         <Card className="text-center">
           <p className="text-2xl font-bold text-green-600 font-heading">{complaints.length > 0 ? Math.round((resolvedOnTime / complaints.length) * 100) : 0}%</p>
@@ -473,11 +611,45 @@ function PerformanceView({ ratings, penalties, avgRating, complaints }: any) {
         </Card>
       </div>
 
+      {/* Detailed Stats */}
+      <Card>
+        <h3 className="font-bold text-[var(--stone-900)] mb-4">Breakdown</h3>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="bg-[var(--stone-50)] rounded-lg p-4">
+            <p className="text-xs text-[var(--stone-500)] mb-1">Normal Complaints</p>
+            <p className="text-lg font-bold text-[var(--stone-900)]">{normalOnTime}/{normalComplaints.length} on time</p>
+            <p className="text-xs text-[var(--stone-500)]">{normalComplaints.length > 0 ? Math.round((normalOnTime / normalComplaints.length) * 100) : 0}%</p>
+          </div>
+          <div className="bg-red-50 rounded-lg p-4">
+            <p className="text-xs text-red-600 mb-1">Emergency Complaints</p>
+            <p className="text-lg font-bold text-red-800">{emergencyOnTime}/{emergencyComplaints.length} on time</p>
+            <p className="text-xs text-red-600">{emergencyComplaints.length > 0 ? Math.round((emergencyOnTime / emergencyComplaints.length) * 100) : 0}%</p>
+          </div>
+          <div className="bg-[var(--stone-50)] rounded-lg p-4 sm:col-span-2">
+            <p className="text-xs text-[var(--stone-500)] mb-1">Median Resolution Time</p>
+            <p className="text-lg font-bold text-[var(--stone-900)]">{medianHours}h</p>
+          </div>
+        </div>
+      </Card>
+
+      {/* How Score is Calculated */}
+      <Card>
+        <h3 className="font-bold text-[var(--stone-900)] mb-3 flex items-center gap-2">
+          <Info className="w-4 h-4 text-[var(--accent-600)]" /> How is my score calculated?
+        </h3>
+        <div className="space-y-2 text-sm text-[var(--stone-700)]">
+          <p><strong>Star Rating:</strong> Average of student ratings (1-3 stars) after resolution. Anonymous to wardens.</p>
+          <p><strong>Penalty Points:</strong> −1 point for each missed deadline. Separate from star rating.</p>
+          <p><strong>On-time Rate:</strong> Percentage of complaints marked resolved before deadline.</p>
+        </div>
+      </Card>
+
+      {/* Recent Ratings */}
       <Card>
         <h3 className="font-bold text-[var(--stone-900)] mb-4">Recent Ratings</h3>
         {ratings.length === 0 ? <p className="text-sm text-[var(--stone-500)]">No ratings yet.</p> : (
           <div className="space-y-3">
-            {ratings.map((r: any) => {
+            {ratings.slice(0, 10).map((r: any) => {
               const c = complaints.find((c: Complaint) => c.id === r.complaintId);
               return (
                 <div key={r.id} className="flex items-center justify-between py-2 border-b border-[var(--stone-100)] last:border-0">
@@ -493,6 +665,7 @@ function PerformanceView({ ratings, penalties, avgRating, complaints }: any) {
         )}
       </Card>
 
+      {/* Penalty Events */}
       <Card>
         <h3 className="font-bold text-[var(--stone-900)] mb-4 flex items-center gap-2">
           <TrendingDown className="w-4 h-4 text-red-600" /> Penalty Events
@@ -507,7 +680,7 @@ function PerformanceView({ ratings, penalties, avgRating, complaints }: any) {
                     <p className="text-sm font-medium text-[var(--stone-900)]">{c?.title || p.complaintId}</p>
                     <p className="text-xs text-[var(--stone-500)]">{p.deadlineType} • {new Date(p.deadlineAt).toLocaleString()}</p>
                   </div>
-                  <span className="text-sm font-bold text-red-600">−1★</span>
+                  <span className="text-sm font-bold text-red-600">−1 pt</span>
                 </div>
               );
             })}
@@ -519,8 +692,8 @@ function PerformanceView({ ratings, penalties, avgRating, complaints }: any) {
 }
 
 // ─── Notifications View ────────────────────────────────────────────────────────
-function NotificationsView({ userId }: any) {
-  const notifications = getStore().notifications.filter(n => n.userId === userId);
+function NotificationsView({ userId, onRefresh }: any) {
+  const notifications = getNotificationsForUser(userId);
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-bold text-[var(--stone-900)] font-heading">Notifications</h2>
@@ -532,10 +705,15 @@ function NotificationsView({ userId }: any) {
             <Card key={n.id} className={n.read ? '' : 'border-[var(--accent-200)] bg-[var(--accent-50)]/30'}>
               <div className="flex items-start gap-3">
                 <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${n.read ? 'bg-[var(--stone-300)]' : 'bg-[var(--accent-500)]'}`} />
-                <div>
+                <div className="flex-1">
                   <p className={`text-sm ${n.read ? 'text-[var(--stone-600)]' : 'text-[var(--stone-900)] font-medium'}`}>{n.message}</p>
                   <p className="text-xs text-[var(--stone-500)] mt-1">{new Date(n.createdAt).toLocaleString()}</p>
                 </div>
+                {!n.read && (
+                  <button onClick={() => { markNotificationRead(n.id); onRefresh(); }} className="text-xs text-[var(--accent-700)] hover:text-[var(--accent-800)] font-medium shrink-0">
+                    Mark read
+                  </button>
+                )}
               </div>
             </Card>
           ))}

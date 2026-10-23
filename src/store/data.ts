@@ -66,6 +66,7 @@ function generateComplaints(): Complaint[] {
       resolutionRound: 1,
       isActive,
       confirmationWindowStart: status === ComplaintStatus.MARKED_RESOLVED ? hoursAgo(i % 50) : null,
+      confirmationWindowEnd: status === ComplaintStatus.MARKED_RESOLVED ? hoursFromNow(24 - (i % 24)) : null,
       createdAt: hoursAgo(createdHours),
       updatedAt: hoursAgo(createdHours - 5),
     });
@@ -76,17 +77,14 @@ function generateComplaints(): Complaint[] {
 
 const complaints = generateComplaints();
 
-// Generate upvotes - some complaints have many votes for promotion testing
+// Generate upvotes
 const upvotes: Upvote[] = [];
-// c-1 has 8 upvotes (close to promotion)
 for (let i = 0; i < 8; i++) {
   upvotes.push({ id: uuid(), complaintId: 'c-1', userId: `student-${i + 3}`, createdAt: hoursAgo(20 - i) });
 }
-// c-6 has 12 upvotes (already promoted in seed)
 for (let i = 0; i < 12; i++) {
   upvotes.push({ id: uuid(), complaintId: 'c-6', userId: `student-${(i % 50) + 1}`, createdAt: hoursAgo(40 - i) });
 }
-// Mark c-6 as promoted
 const c6 = complaints.find(c => c.id === 'c-6');
 if (c6) {
   c6.priority = Priority.EMERGENCY;
@@ -94,16 +92,10 @@ if (c6) {
 }
 
 // Resolution votes
-const resolutionVotes: ResolutionVote[] = [
-  { id: uuid(), complaintId: 'c-11', userId: 'student-12', voteType: VoteType.SOLVED, round: 1, createdAt: hoursAgo(25) },
-  { id: uuid(), complaintId: 'c-11', userId: 'student-13', voteType: VoteType.SOLVED, round: 1, createdAt: hoursAgo(24) },
-  { id: uuid(), complaintId: 'c-11', userId: 'student-14', voteType: VoteType.SOLVED, round: 1, createdAt: hoursAgo(23) },
-];
+const resolutionVotes: ResolutionVote[] = [];
 
 // Warden ratings
-const wardenRatings: WardenRating[] = [
-  { id: uuid(), complaintId: 'c-11', wardenId: 'warden-1', studentId: 'student-11', stars: 3, createdAt: hoursAgo(19) },
-];
+const wardenRatings: WardenRating[] = [];
 
 // Penalty events
 const penaltyEvents: PenaltyEvent[] = [];
@@ -127,7 +119,7 @@ export interface Store {
   auditEvents: AuditEvent[];
 }
 
-const STORAGE_KEY = 'hmcs-store-v2';
+const STORAGE_KEY = 'hmcs-store-v3';
 
 function getInitialStore(): Store {
   const stored = localStorage.getItem(STORAGE_KEY);
@@ -201,6 +193,10 @@ export function removeUpvote(complaintId: string, userId: string) {
 }
 
 export function addResolutionVote(vote: ResolutionVote) {
+  // Remove any existing vote from this user for this complaint/round
+  store.resolutionVotes = store.resolutionVotes.filter(v => 
+    !(v.complaintId === vote.complaintId && v.userId === vote.userId && v.round === vote.round)
+  );
   store.resolutionVotes = [...store.resolutionVotes, vote];
   persist();
 }
@@ -230,7 +226,83 @@ export function addPenaltyEvent(penalty: PenaltyEvent) {
   persist();
 }
 
-// Promotion logic - transactional
+// Status transition validation
+const ALLOWED_TRANSITIONS: Record<ComplaintStatus, ComplaintStatus[]> = {
+  [ComplaintStatus.SUBMITTED]: [ComplaintStatus.ACKNOWLEDGED, ComplaintStatus.REJECTED],
+  [ComplaintStatus.ACKNOWLEDGED]: [ComplaintStatus.IN_PROGRESS, ComplaintStatus.REJECTED],
+  [ComplaintStatus.IN_PROGRESS]: [ComplaintStatus.MARKED_RESOLVED, ComplaintStatus.REJECTED],
+  [ComplaintStatus.MARKED_RESOLVED]: [ComplaintStatus.RESOLVED, ComplaintStatus.REOPENED],
+  [ComplaintStatus.RESOLVED]: [ComplaintStatus.CLOSED],
+  [ComplaintStatus.REOPENED]: [ComplaintStatus.IN_PROGRESS],
+  [ComplaintStatus.CLOSED]: [],
+  [ComplaintStatus.REJECTED]: [],
+};
+
+export function canTransition(from: ComplaintStatus, to: ComplaintStatus): boolean {
+  return ALLOWED_TRANSITIONS[from]?.includes(to) || false;
+}
+
+export function updateComplaintStatus(
+  complaintId: string,
+  newStatus: ComplaintStatus,
+  actorId: string,
+  resolutionNote?: string
+): { success: boolean; error?: string } {
+  const complaint = store.complaints.find(c => c.id === complaintId);
+  if (!complaint) return { success: false, error: 'Complaint not found' };
+  
+  if (!canTransition(complaint.status, newStatus)) {
+    return { success: false, error: `Invalid transition from ${complaint.status} to ${newStatus}` };
+  }
+  
+  const updates: Partial<Complaint> = { status: newStatus };
+  
+  if (newStatus === ComplaintStatus.MARKED_RESOLVED) {
+    if (!resolutionNote || resolutionNote.length < 10) {
+      return { success: false, error: 'Resolution note must be at least 10 characters' };
+    }
+    updates.markedResolvedAt = new Date().toISOString();
+    updates.resolutionNote = resolutionNote;
+    updates.confirmationWindowStart = new Date().toISOString();
+    updates.confirmationWindowEnd = new Date(Date.now() + POLICY.confirmationWindowHours * 3600000).toISOString();
+    
+    // Notify submitter
+    addNotification({
+      id: uuid(),
+      userId: complaint.submitterId,
+      message: `Your complaint "${complaint.title}" has been marked resolved. Please confirm.`,
+      read: false,
+      createdAt: new Date().toISOString(),
+    });
+  }
+  
+  if (newStatus === ComplaintStatus.RESOLVED) {
+    updates.resolvedAt = new Date().toISOString();
+    updates.isActive = false;
+  }
+  
+  if (newStatus === ComplaintStatus.REOPENED) {
+    updates.resolutionRound = (complaint.resolutionRound || 1) + 1;
+    updates.isActive = true;
+  }
+  
+  updateComplaint(complaintId, updates);
+  
+  addAuditEvent({
+    id: uuid(),
+    actorId,
+    action: 'STATUS_CHANGED',
+    entityType: 'Complaint',
+    entityId: complaintId,
+    before: { status: complaint.status },
+    after: { status: newStatus },
+    createdAt: new Date().toISOString(),
+  });
+  
+  return { success: true };
+}
+
+// Promotion logic
 export function checkAndPromote(complaintId: string): boolean {
   const complaint = store.complaints.find(c => c.id === complaintId);
   if (!complaint || complaint.priority !== Priority.NORMAL) return false;
@@ -238,7 +310,6 @@ export function checkAndPromote(complaintId: string): boolean {
   const upvoteCount = store.upvotes.filter(u => u.complaintId === complaintId).length;
   if (upvoteCount < POLICY.promotionThreshold) return false;
   
-  // Promote
   const now = new Date().toISOString();
   updateComplaint(complaintId, {
     priority: Priority.EMERGENCY,
@@ -246,7 +317,6 @@ export function checkAndPromote(complaintId: string): boolean {
     deadlineAt: new Date(Date.now() + POLICY.emergencyDeadlineHours * 3600000).toISOString(),
   });
   
-  // Audit event
   addAuditEvent({
     id: uuid(),
     actorId: 'system',
@@ -258,7 +328,6 @@ export function checkAndPromote(complaintId: string): boolean {
     createdAt: now,
   });
   
-  // Notifications
   addNotification({
     id: uuid(),
     userId: complaint.submitterId,
@@ -278,6 +347,131 @@ export function checkAndPromote(complaintId: string): boolean {
   }
   
   return true;
+}
+
+// Resolution vote processing
+export function processResolutionVote(complaintId: string): void {
+  const complaint = store.complaints.find(c => c.id === complaintId);
+  if (!complaint || complaint.status !== ComplaintStatus.MARKED_RESOLVED) return;
+  
+  const votes = store.resolutionVotes.filter(v => 
+    v.complaintId === complaintId && v.round === complaint.resolutionRound
+  );
+  
+  const solvedCount = votes.filter(v => v.voteType === VoteType.SOLVED).length;
+  const notSolvedCount = votes.filter(v => v.voteType === VoteType.NOT_SOLVED).length;
+  
+  if (solvedCount >= POLICY.resolutionVotesRequired) {
+    updateComplaintStatus(complaintId, ComplaintStatus.RESOLVED, 'system');
+    addNotification({
+      id: uuid(),
+      userId: complaint.submitterId,
+      message: `Your complaint "${complaint.title}" has been confirmed resolved!`,
+      read: false,
+      createdAt: new Date().toISOString(),
+    });
+    if (complaint.assignedWardenId) {
+      addNotification({
+        id: uuid(),
+        userId: complaint.assignedWardenId,
+        message: `Complaint "${complaint.title}" confirmed resolved by students.`,
+        read: false,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  } else if (notSolvedCount >= POLICY.resolutionVotesRequired) {
+    updateComplaintStatus(complaintId, ComplaintStatus.REOPENED, 'system');
+    addNotification({
+      id: uuid(),
+      userId: complaint.submitterId,
+      message: `Your complaint "${complaint.title}" has been reopened.`,
+      read: false,
+      createdAt: new Date().toISOString(),
+    });
+    if (complaint.assignedWardenId) {
+      addNotification({
+        id: uuid(),
+        userId: complaint.assignedWardenId,
+        message: `Complaint "${complaint.title}" reopened by students. Please review.`,
+        read: false,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
+}
+
+// Window expiry check
+export function checkExpiredWindows(): void {
+  const now = new Date();
+  const expiredComplaints = store.complaints.filter(c => 
+    c.status === ComplaintStatus.MARKED_RESOLVED &&
+    c.confirmationWindowEnd &&
+    new Date(c.confirmationWindowEnd) < now
+  );
+  
+  for (const complaint of expiredComplaints) {
+    const votes = store.resolutionVotes.filter(v => 
+      v.complaintId === complaint.id && v.round === complaint.resolutionRound
+    );
+    const solvedCount = votes.filter(v => v.voteType === VoteType.SOLVED).length;
+    const notSolvedCount = votes.filter(v => v.voteType === VoteType.NOT_SOLVED).length;
+    
+    // If neither threshold met, return to IN_PROGRESS
+    if (solvedCount < POLICY.resolutionVotesRequired && notSolvedCount < POLICY.resolutionVotesRequired) {
+      updateComplaintStatus(complaint.id, ComplaintStatus.IN_PROGRESS, 'system');
+      if (complaint.assignedWardenId) {
+        addNotification({
+          id: uuid(),
+          userId: complaint.assignedWardenId,
+          message: `Complaint "${complaint.title}" confirmation window expired. Returned to In Progress.`,
+          read: false,
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
+  }
+}
+
+// Penalty scheduler
+export function checkOverdueAndPenalize(): void {
+  const now = new Date();
+  const overdueComplaints = store.complaints.filter(c => 
+    c.isActive &&
+    c.status !== ComplaintStatus.MARKED_RESOLVED &&
+    c.status !== ComplaintStatus.RESOLVED &&
+    c.status !== ComplaintStatus.CLOSED &&
+    new Date(c.deadlineAt) < now
+  );
+  
+  for (const complaint of overdueComplaints) {
+    if (!complaint.assignedWardenId) continue;
+    
+    // Check if penalty already exists for this complaint/deadline
+    const existingPenalty = store.penaltyEvents.find(p => 
+      p.complaintId === complaint.id &&
+      p.deadlineType === complaint.priority &&
+      p.deadlineAt === complaint.deadlineAt
+    );
+    
+    if (!existingPenalty) {
+      addPenaltyEvent({
+        id: uuid(),
+        complaintId: complaint.id,
+        wardenId: complaint.assignedWardenId,
+        deadlineType: complaint.priority,
+        deadlineAt: complaint.deadlineAt,
+        createdAt: now.toISOString(),
+      });
+      
+      addNotification({
+        id: uuid(),
+        userId: complaint.assignedWardenId,
+        message: `Penalty applied: Missed ${complaint.priority.toLowerCase()} deadline for "${complaint.title}".`,
+        read: false,
+        createdAt: now.toISOString(),
+      });
+    }
+  }
 }
 
 // Queries
@@ -337,4 +531,10 @@ export function getStudentEmergencyThisWeek(studentId: string): number {
 
 export function getAuditForComplaint(complaintId: string): AuditEvent[] {
   return store.auditEvents.filter(e => e.entityId === complaintId);
+}
+
+// Run schedulers
+export function runSchedulers(): void {
+  checkExpiredWindows();
+  checkOverdueAndPenalize();
 }

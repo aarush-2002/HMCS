@@ -136,6 +136,7 @@ export interface Complaint {
   resolutionRound: number;
   isActive: boolean;
   confirmationWindowStart: string | null;
+  confirmationWindowEnd: string | null;
   createdAt: string;
   updatedAt: string;
 }

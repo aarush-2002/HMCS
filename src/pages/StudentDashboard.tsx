@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -12,7 +12,7 @@ import {
   getUpvotesForComplaint, getResolutionVotesForComplaint,
   getStudentComplaintsToday, getStudentEmergencyThisWeek,
   getNotificationsForUser, markNotificationRead, getAuditForComplaint,
-  checkAndPromote,
+  checkAndPromote, processResolutionVote, runSchedulers,
 } from '../store/data';
 import {
   Button, Card, Badge, StatusBadge, PriorityBadge, Tabs, Input, Textarea,
@@ -20,7 +20,7 @@ import {
 } from '../components/ui';
 import { v4 as uuid } from 'uuid';
 import {
-  Plus, AlertTriangle, ThumbsUp, CheckCircle, XCircle, Star, Bell,
+  Plus, AlertTriangle, ThumbsUp, ThumbsDown, CheckCircle, XCircle, Star, Bell,
   Clock, LogOut, Building2, Search, Send, ArrowLeft, Home, FileText,
   Filter, Zap, ArrowUpDown,
 } from 'lucide-react';
@@ -35,6 +35,11 @@ export default function StudentDashboard() {
   const [selectedComplaint, setSelectedComplaint] = useState<string | null>(null);
   const [, setRefresh] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
+
+  // Run schedulers on mount
+  useEffect(() => {
+    runSchedulers();
+  }, []);
 
   // URL state for filters
   const searchQuery = searchParams.get('q') || '';
@@ -450,7 +455,8 @@ function NewComplaintForm({ user, onSubmit }: any) {
         deadlineAt: calculateDeadline(priority, now),
         promotedAt: null, markedResolvedAt: null, resolvedAt: null,
         resolutionNote: null, resolutionRound: 1, isActive: true,
-        confirmationWindowStart: null, createdAt: now, updatedAt: now,
+        confirmationWindowStart: null, confirmationWindowEnd: null,
+        createdAt: now, updatedAt: now,
       };
       addComplaint(complaint);
       addAuditEvent({
@@ -534,6 +540,7 @@ function ComplaintDetail({ complaintId, user, onBack, onRefresh }: any) {
   const hasVoted = upvotes.some(u => u.userId === user.id);
   const resVotes = getResolutionVotesForComplaint(complaintId, complaint?.resolutionRound || 1);
   const solvedVotes = resVotes.filter(v => v.voteType === VoteType.SOLVED).length;
+  const notSolvedVotes = resVotes.filter(v => v.voteType === VoteType.NOT_SOLVED).length;
   const hasResolutionVoted = resVotes.some(v => v.userId === user.id);
   const auditEvents = getAuditForComplaint(complaintId);
   const isMyComplaint = complaint?.submitterId === user.id;
@@ -562,11 +569,21 @@ function ComplaintDetail({ complaintId, user, onBack, onRefresh }: any) {
   };
 
   const handleResolutionVote = (voteType: VoteType.SOLVED | VoteType.NOT_SOLVED) => {
+    // Check if window is still open
+    if (complaint.confirmationWindowEnd && new Date(complaint.confirmationWindowEnd) < new Date()) {
+      showToast('error', 'Confirmation window has closed');
+      return;
+    }
+    
     addResolutionVote({ id: uuid(), complaintId, userId: user.id, voteType, round: complaint.resolutionRound, createdAt: new Date().toISOString() });
-    const newSolved = voteType === VoteType.SOLVED ? solvedVotes + 1 : solvedVotes;
-    if (newSolved >= POLICY.resolutionVotesRequired) {
-      updateComplaint(complaintId, { status: ComplaintStatus.RESOLVED, resolvedAt: new Date().toISOString(), isActive: false });
-      showToast('success', 'Complaint resolved!');
+    
+    // Process the vote (check thresholds)
+    processResolutionVote(complaintId);
+    
+    if (voteType === VoteType.SOLVED) {
+      showToast('success', 'Vote recorded: Solved');
+    } else {
+      showToast('info', 'Vote recorded: Not Solved');
     }
     onRefresh();
   };
@@ -667,17 +684,48 @@ function ComplaintDetail({ complaintId, user, onBack, onRefresh }: any) {
               <h3 className="text-sm font-medium text-[var(--accent-800)] mb-2 flex items-center gap-2">
                 <CheckCircle className="w-4 h-4" /> Confirm Resolution
               </h3>
+              {complaint.resolutionNote && (
+                <p className="text-sm text-[var(--accent-700)] mb-3 italic">"{complaint.resolutionNote}"</p>
+              )}
               <p className="text-sm text-[var(--accent-700)] mb-3">Does this issue appear to be resolved?</p>
-              <div className="flex items-center gap-4 mb-3">
-                <span className="text-sm text-[var(--accent-700)]">✅ Solved: <strong>{solvedVotes}</strong>/{POLICY.resolutionVotesRequired}</span>
+              
+              {/* Tally */}
+              <div className="grid grid-cols-2 gap-4 mb-3">
+                <div className="bg-green-50 rounded-lg p-3 text-center">
+                  <p className="text-xs text-green-600">Solved</p>
+                  <p className="text-lg font-bold text-green-700">{solvedVotes}/{POLICY.resolutionVotesRequired}</p>
+                </div>
+                <div className="bg-red-50 rounded-lg p-3 text-center">
+                  <p className="text-xs text-red-600">Not Solved</p>
+                  <p className="text-lg font-bold text-red-700">{notSolvedVotes}/{POLICY.resolutionVotesRequired}</p>
+                </div>
               </div>
-              {!hasResolutionVoted && (
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => handleResolutionVote(VoteType.SOLVED)} icon={<CheckCircle className="w-4 h-4" />}>Solved</Button>
-                  <Button size="sm" variant="danger" onClick={() => handleResolutionVote(VoteType.NOT_SOLVED)} icon={<XCircle className="w-4 h-4" />}>Not Solved</Button>
+              
+              {/* Window countdown */}
+              {complaint.confirmationWindowEnd && (
+                <div className="flex items-center gap-2 text-sm text-[var(--accent-700)] mb-3">
+                  <Clock className="w-4 h-4" />
+                  <span>Window closes: <Countdown deadlineAt={complaint.confirmationWindowEnd} /></span>
                 </div>
               )}
-              {hasResolutionVoted && <p className="text-sm text-[var(--accent-600)] italic">You have already voted.</p>}
+              
+              {/* Vote buttons */}
+              {!hasResolutionVoted ? (
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => handleResolutionVote(VoteType.SOLVED)} icon={<ThumbsUp className="w-4 h-4" />}>Yes, fixed</Button>
+                  <Button size="sm" variant="danger" onClick={() => handleResolutionVote(VoteType.NOT_SOLVED)} icon={<ThumbsDown className="w-4 h-4" />}>No, still a problem</Button>
+                </div>
+              ) : (
+                <div className="bg-white rounded-lg p-3 border border-[var(--accent-200)]">
+                  <p className="text-sm text-[var(--accent-700)] flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" />
+                    Your vote: {resVotes.find(v => v.userId === user.id)?.voteType === VoteType.SOLVED ? '✅ Yes, fixed' : '❌ No, still a problem'}
+                  </p>
+                  {complaint.confirmationWindowEnd && new Date(complaint.confirmationWindowEnd) > new Date() && (
+                    <p className="text-xs text-[var(--stone-500)] mt-1">You can change your vote while the window is open.</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
