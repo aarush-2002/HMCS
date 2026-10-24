@@ -13,6 +13,11 @@ const StudentDashboard = lazy(() => import('./pages/StudentDashboard'));
 const WardenDashboard = lazy(() => import('./pages/WardenDashboard'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const Design = lazy(() => import('./pages/Design'));
+const Feed = lazy(() => import('./pages/Feed'));
+const NewComplaint = lazy(() => import('./pages/NewComplaint'));
+const ComplaintDetail = lazy(() => import('./pages/ComplaintDetail'));
+const MyComplaints = lazy(() => import('./pages/MyComplaints'));
+const Notifications = lazy(() => import('./pages/Notifications'));
 
 // ─── Error Boundary ────────────────────────────────────────────────────────────
 class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -118,7 +123,19 @@ function AppRoutes() {
         } />
         <Route path="/student/login" element={<StudentLogin />} />
         <Route path="/student" element={
-          <ProtectedRoute requiredRole={Role.STUDENT}><StudentDashboard /></ProtectedRoute>
+          <ProtectedRoute requiredRole={Role.STUDENT}><Feed /></ProtectedRoute>
+        } />
+        <Route path="/student/new" element={
+          <ProtectedRoute requiredRole={Role.STUDENT}><NewComplaint /></ProtectedRoute>
+        } />
+        <Route path="/student/complaint/:id" element={
+          <ProtectedRoute requiredRole={Role.STUDENT}><ComplaintDetail /></ProtectedRoute>
+        } />
+        <Route path="/student/mine" element={
+          <ProtectedRoute requiredRole={Role.STUDENT}><MyComplaints /></ProtectedRoute>
+        } />
+        <Route path="/student/notifications" element={
+          <ProtectedRoute requiredRole={Role.STUDENT}><Notifications /></ProtectedRoute>
         } />
         <Route path="/warden/login" element={<WardenLogin />} />
         <Route path="/warden" element={
