@@ -10,6 +10,7 @@ const Landing = lazy(() => import('./pages/Landing'));
 const StudentDashboard = lazy(() => import('./pages/StudentDashboard'));
 const WardenDashboard = lazy(() => import('./pages/WardenDashboard'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const Design = lazy(() => import('./pages/Design'));
 
 // ─── Error Boundary ────────────────────────────────────────────────────────────
 class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -122,6 +123,7 @@ function AppRoutes() {
         <Route path="/admin" element={
           <ProtectedRoute requiredRole={Role.ADMIN}><AdminDashboard /></ProtectedRoute>
         } />
+        <Route path="/design" element={<Design />} />
         <Route path="/403" element={<ForbiddenPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
