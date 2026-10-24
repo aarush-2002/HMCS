@@ -19,6 +19,20 @@ const ComplaintDetail = lazy(() => import('./pages/ComplaintDetail'));
 const MyComplaints = lazy(() => import('./pages/MyComplaints'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 
+// Warden pages (calm mode)
+const WardenQueue = lazy(() => import('./pages/WardenQueue'));
+const WardenComplaintDetail = lazy(() => import('./pages/WardenComplaintDetail'));
+const WardenOverdue = lazy(() => import('./pages/WardenOverdue'));
+const WardenPerformance = lazy(() => import('./pages/WardenPerformance'));
+const WardenNotifications = lazy(() => import('./pages/WardenNotifications'));
+
+// Admin pages (calm mode)
+const AdminUsers = lazy(() => import('./pages/AdminUsers'));
+const AdminHostels = lazy(() => import('./pages/AdminHostels'));
+const AdminPolicies = lazy(() => import('./pages/AdminPolicies'));
+const AdminAudit = lazy(() => import('./pages/AdminAudit'));
+const AdminScores = lazy(() => import('./pages/AdminScores'));
+
 // ─── Error Boundary ────────────────────────────────────────────────────────────
 class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
   constructor(props: { children: React.ReactNode }) {
@@ -64,40 +78,19 @@ function LoadingFallback() {
   );
 }
 
-// ─── 403 Page ──────────────────────────────────────────────────────────────────
+// ─── Error Pages ───────────────────────────────────────────────────────────────
+import { ErrorPage } from './components/ErrorPage';
+
 function ForbiddenPage() {
-  return (
-    <div className="min-h-screen bg-[var(--stone-50)] flex items-center justify-center p-4">
-      <div className="text-center max-w-md">
-        <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <ShieldX className="w-8 h-8 text-red-600" />
-        </div>
-        <h1 className="text-2xl font-bold text-[var(--stone-900)] font-heading mb-2">Access Denied</h1>
-        <p className="text-sm text-[var(--stone-600)] mb-6">You don't have permission to access this page. Please sign in with the correct role.</p>
-        <a href="#/" className="px-6 py-2.5 bg-[var(--accent-700)] text-white rounded-lg text-sm font-medium hover:bg-[var(--accent-800)] transition inline-block">
-          Go to Login
-        </a>
-      </div>
-    </div>
-  );
+  return <ErrorPage code="403" />;
 }
 
-// ─── 404 Page ──────────────────────────────────────────────────────────────────
 function NotFoundPage() {
-  return (
-    <div className="min-h-screen bg-[var(--stone-50)] flex items-center justify-center p-4">
-      <div className="text-center max-w-md">
-        <div className="w-16 h-16 bg-[var(--stone-100)] rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <Building2 className="w-8 h-8 text-[var(--stone-400)]" />
-        </div>
-        <h1 className="text-4xl font-bold text-[var(--stone-900)] font-heading mb-2">404</h1>
-        <p className="text-sm text-[var(--stone-600)] mb-6">This page doesn't exist or has been moved.</p>
-        <a href="#/" className="px-6 py-2.5 bg-[var(--accent-700)] text-white rounded-lg text-sm font-medium hover:bg-[var(--accent-800)] transition inline-block">
-          Return Home
-        </a>
-      </div>
-    </div>
-  );
+  return <ErrorPage code="404" />;
+}
+
+function ServerErrorPage() {
+  return <ErrorPage code="500" />;
 }
 
 // ─── Protected Route ───────────────────────────────────────────────────────────
@@ -139,13 +132,38 @@ function AppRoutes() {
         } />
         <Route path="/warden/login" element={<WardenLogin />} />
         <Route path="/warden" element={
-          <ProtectedRoute requiredRole={Role.WARDEN}><WardenDashboard /></ProtectedRoute>
+          <ProtectedRoute requiredRole={Role.WARDEN}><WardenQueue /></ProtectedRoute>
+        } />
+        <Route path="/warden/complaint/:id" element={
+          <ProtectedRoute requiredRole={Role.WARDEN}><WardenComplaintDetail /></ProtectedRoute>
+        } />
+        <Route path="/warden/overdue" element={
+          <ProtectedRoute requiredRole={Role.WARDEN}><WardenOverdue /></ProtectedRoute>
+        } />
+        <Route path="/warden/performance" element={
+          <ProtectedRoute requiredRole={Role.WARDEN}><WardenPerformance /></ProtectedRoute>
+        } />
+        <Route path="/warden/notifications" element={
+          <ProtectedRoute requiredRole={Role.WARDEN}><WardenNotifications /></ProtectedRoute>
         } />
         <Route path="/admin" element={
-          <ProtectedRoute requiredRole={Role.ADMIN}><AdminDashboard /></ProtectedRoute>
+          <ProtectedRoute requiredRole={Role.ADMIN}><AdminUsers /></ProtectedRoute>
+        } />
+        <Route path="/admin/hostels" element={
+          <ProtectedRoute requiredRole={Role.ADMIN}><AdminHostels /></ProtectedRoute>
+        } />
+        <Route path="/admin/policies" element={
+          <ProtectedRoute requiredRole={Role.ADMIN}><AdminPolicies /></ProtectedRoute>
+        } />
+        <Route path="/admin/audit" element={
+          <ProtectedRoute requiredRole={Role.ADMIN}><AdminAudit /></ProtectedRoute>
+        } />
+        <Route path="/admin/scores" element={
+          <ProtectedRoute requiredRole={Role.ADMIN}><AdminScores /></ProtectedRoute>
         } />
         <Route path="/design" element={<Design />} />
         <Route path="/403" element={<ForbiddenPage />} />
+        <Route path="/500" element={<ServerErrorPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Suspense>
