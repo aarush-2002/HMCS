@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Bell, User, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ReducedMotionToggle } from './ReducedMotionToggle';
 
 interface ShellProps {
   children: React.ReactNode;
@@ -22,6 +23,14 @@ export function Shell({ children, unreadCount = 0, userName = 'Student' }: Shell
 
   return (
     <div className="min-h-screen bg-ink text-bone relative">
+      {/* Skip Navigation Link */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-ember focus:text-ink focus:rounded-lg focus:outline-none focus:ring-2 focus:ring-ember"
+      >
+        Skip to main content
+      </a>
+
       {/* Top Bar */}
       <header className="fixed top-0 left-0 right-0 z-40 bg-ink-2/80 backdrop-blur-md border-b border-line">
         <div className="max-w-[1400px] mx-auto px-6 h-16 flex items-center justify-between">
@@ -174,11 +183,14 @@ export function Shell({ children, unreadCount = 0, userName = 'Student' }: Shell
       </nav>
 
       {/* Main Content */}
-      <main className="pt-16 md:pl-16 pb-16 md:pb-0">
+      <main id="main-content" className="pt-16 md:pl-16 pb-16 md:pb-0">
         <div className="max-w-[1400px] mx-auto px-6 py-8">
           {children}
         </div>
       </main>
+
+      {/* Reduced Motion Toggle */}
+      <ReducedMotionToggle />
     </div>
   );
 }

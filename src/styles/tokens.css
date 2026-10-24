@@ -91,6 +91,25 @@ body {
   overflow-x: hidden;
 }
 
+/* ---------- Reduced Motion Support ---------- */
+.reduce-motion,
+.reduce-motion * {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+.reduce-motion .parallax,
+.reduce-motion .cloth,
+.reduce-motion .sway,
+.reduce-motion .word-reveal,
+.reduce-motion .rain,
+.reduce-motion .leaf-fall,
+.reduce-motion .ember-particles {
+  display: none !important;
+}
+
 /* Devanagari: horizontal only, never vertical — shirorekha must stay intact */
 [lang="hi"],
 .devanagari {
