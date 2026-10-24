@@ -5,6 +5,8 @@
 
 import * as THREE from 'three';
 import { PostProcessingPipeline } from './postprocessing';
+import { HostelScene } from './scene';
+import { ViewportCards } from './viewport-cards';
 import {
   createSlateTexture,
   createConcreteTexture,
@@ -95,6 +97,8 @@ export class WorldRuntime {
   private camera!: THREE.PerspectiveCamera;
   private postProcessing!: PostProcessingPipeline;
   private governor!: PerformanceGovernor;
+  private hostelScene!: HostelScene;
+  private viewportCards!: ViewportCards;
   
   // Camera rig
   private positionCurve!: THREE.CatmullRomCurve3;
@@ -119,6 +123,7 @@ export class WorldRuntime {
   private paused = false;
   private animationFrameId = 0;
   private startTime = 0;
+  private lastFrameTime = 0;
   
   // Listeners
   private resizeHandler!: () => void;
@@ -145,7 +150,8 @@ export class WorldRuntime {
     this.initCameraRig();
     this.initPostProcessing(postEnabled);
     this.initPerformanceGovernor(isLowQuality);
-    this.buildPlaceholderScene(isLowQuality);
+    this.initHostelScene(isLowQuality);
+    this.initViewportCards();
     this.initEventListeners();
     this.handleResize();
     
@@ -243,14 +249,25 @@ export class WorldRuntime {
   }
   
   private initCameraRig(): void {
-    // Define waypoints for 6 chapters
+    // Define waypoints for 6 chapters (site plan: hostel at z=-40, gate at z=-8)
     this.waypoints = [
-      { position: new THREE.Vector3(0, 2, 10), lookAt: new THREE.Vector3(0, 2, 0), fov: 55, anchor: 0 },
-      { position: new THREE.Vector3(-3, 3, 8), lookAt: new THREE.Vector3(0, 3, 0), fov: 50, anchor: 0.2 },
-      { position: new THREE.Vector3(-5, 4, 5), lookAt: new THREE.Vector3(0, 4, 0), fov: 48, anchor: 0.4 },
-      { position: new THREE.Vector3(-2, 5, 3), lookAt: new THREE.Vector3(0, 5, 0), fov: 45, anchor: 0.6 },
-      { position: new THREE.Vector3(2, 4, 4), lookAt: new THREE.Vector3(0, 3, 0), fov: 50, anchor: 0.8 },
-      { position: new THREE.Vector3(0, 2, 6), lookAt: new THREE.Vector3(0, 2, 0), fov: 55, anchor: 1.0 },
+      // 0 Hero: wide and slightly low, whole block, moon over the water tank
+      { position: new THREE.Vector3(0, 3, 5), lookAt: new THREE.Vector3(0, 7, -40), fov: 55, anchor: 0 },
+      
+      // 1 Report: low, left of the path, gate and notice board filling the right of frame
+      { position: new THREE.Vector3(-8, 2, -5), lookAt: new THREE.Vector3(2, 2, -8), fov: 50, anchor: 0.2 },
+      
+      // 2 Support: moves along the facade at window height so the glowing grid sweeps past
+      { position: new THREE.Vector3(-15, 6, -35), lookAt: new THREE.Vector3(0, 6, -40), fov: 48, anchor: 0.4 },
+      
+      // 3 Resolve: close, from the right, aimed at the warden's office window (ground-floor)
+      { position: new THREE.Vector3(12, 3, -38), lookAt: new THREE.Vector3(-5, 3, -40), fov: 45, anchor: 0.6 },
+      
+      // 4 Daybreak: rises over the roof as the sky lightens slightly toward the horizon
+      { position: new THREE.Vector3(5, 18, -45), lookAt: new THREE.Vector3(0, 14, -40), fov: 50, anchor: 0.8 },
+      
+      // 5 Colophon: high, still, dawn haze, roof edge
+      { position: new THREE.Vector3(0, 20, -50), lookAt: new THREE.Vector3(0, 15, -40), fov: 52, anchor: 1.0 },
     ];
     
     // Build CatmullRom curves
@@ -293,115 +310,17 @@ export class WorldRuntime {
     this.governor = new PerformanceGovernor(this.renderer, lowQuality);
   }
   
-  private buildPlaceholderScene(lowQuality: boolean): void {
-    // ─── Ground (wet slate) ──────────────────────────────────────────────────
-    const groundGeom = new THREE.PlaneGeometry(40, 40);
-    const groundMat = new THREE.MeshStandardMaterial({
-      map: createSlateTexture(),
-      roughness: 0.7,
-      metalness: 0.1,
-    });
-    const ground = new THREE.Mesh(groundGeom, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    this.scene.add(ground);
-    
-    // ─── Placeholder Building (board-formed concrete box) ────────────────────
-    const buildingGeom = new THREE.BoxGeometry(6, 8, 4);
-    const buildingMat = new THREE.MeshStandardMaterial({
-      map: createConcreteTexture(),
-      roughness: 0.9,
-      metalness: 0.0,
-    });
-    const building = new THREE.Mesh(buildingGeom, buildingMat);
-    building.position.set(0, 4, 0);
-    building.castShadow = true;
-    building.receiveShadow = true;
-    this.scene.add(building);
-    
-    // ─── Windows (emissive HDR for bloom) ────────────────────────────────────
-    const windowGeom = new THREE.PlaneGeometry(1, 1.2);
-    const windowMat = new THREE.MeshStandardMaterial({
-      map: createSlateTexture(), // Reuse for now
-      emissive: new THREE.Color(0xf5a524),
-      emissiveIntensity: 2.5, // HDR value > 1 for bloom
-      roughness: 0.3,
-    });
-    
-    // Add windows to building front
-    for (let row = 0; row < 3; row++) {
-      for (let col = 0; col < 2; col++) {
-        const windowMesh = new THREE.Mesh(windowGeom, windowMat);
-        windowMesh.position.set(-1.5 + col * 3, 2 + row * 2.5, 2.01);
-        this.scene.add(windowMesh);
-        
-        // Point light for each window
-        const windowLight = new THREE.PointLight(0xf5a524, 0.5, 5);
-        windowLight.position.set(-1.5 + col * 3, 2 + row * 2.5, 2.5);
-        this.scene.add(windowLight);
-      }
-    }
-    
-    // ─── Test Lamp Post ──────────────────────────────────────────────────────
-    const lampPostGeom = new THREE.CylinderGeometry(0.05, 0.05, 3);
-    const lampPostMat = new THREE.MeshStandardMaterial({
-      color: 0x333333,
-      roughness: 0.8,
-      metalness: 0.3,
-    });
-    const lampPost = new THREE.Mesh(lampPostGeom, lampPostMat);
-    lampPost.position.set(4, 1.5, 3);
-    lampPost.castShadow = true;
-    this.scene.add(lampPost);
-    
-    // Lamp head (glowing sphere)
-    const lampHeadGeom = new THREE.SphereGeometry(0.2, 16, 16);
-    const lampHeadMat = new THREE.MeshStandardMaterial({
-      color: 0xf5a524,
-      emissive: new THREE.Color(0xf5a524),
-      emissiveIntensity: 3.0,
-      roughness: 0.2,
-    });
-    const lampHead = new THREE.Mesh(lampHeadGeom, lampHeadMat);
-    lampHead.position.set(4, 3.2, 3);
-    this.scene.add(lampHead);
-    
-    // Lamp point light
-    const lampLight = new THREE.PointLight(0xf5a524, 1.5, 8);
-    lampLight.position.set(4, 3.2, 3);
-    lampLight.castShadow = !lowQuality;
-    if (!lowQuality) {
-      lampLight.shadow.mapSize.set(512, 512);
-    }
-    this.scene.add(lampLight);
-    
-    // ─── Moon (pale gold disc) ───────────────────────────────────────────────
-    const moonGeom = new THREE.SphereGeometry(1.5, 32, 32);
-    const moonMat = new THREE.MeshBasicMaterial({
-      map: createMoonTexture(),
-      color: 0xfff0c8,
-    });
-    const moon = new THREE.Mesh(moonGeom, moonMat);
-    moon.position.set(15, 12, -20);
-    this.scene.add(moon);
-    
-    // Moon glow sprite
-    const glowSpriteMat = new THREE.SpriteMaterial({
-      map: createGlowSprite(),
-      color: 0xfff0c8,
-      transparent: true,
-      opacity: 0.4,
-      blending: THREE.AdditiveBlending,
-    });
-    const moonGlow = new THREE.Sprite(glowSpriteMat);
-    moonGlow.position.copy(moon.position);
-    moonGlow.scale.set(8, 8, 1);
-    this.scene.add(moonGlow);
+  private initHostelScene(lowQuality: boolean): void {
+    this.hostelScene = new HostelScene(this.scene, { lowQuality });
     
     // Bake shadows once
     if (!lowQuality) {
       this.renderer.shadowMap.needsUpdate = true;
     }
+  }
+  
+  private initViewportCards(): void {
+    this.viewportCards = new ViewportCards(this.renderer);
   }
   
   // ─── Event Listeners ─────────────────────────────────────────────────────────
@@ -494,6 +413,8 @@ export class WorldRuntime {
     
     const now = performance.now();
     const elapsed = (now - this.startTime) / 1000;
+    const deltaTime = (now - this.lastFrameTime) / 1000;
+    this.lastFrameTime = now;
     
     // ─── Opening Dolly ───────────────────────────────────────────────────────
     if (!this.dollyComplete) {
@@ -538,6 +459,18 @@ export class WorldRuntime {
       this.camera.lookAt(lookAt);
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
+    }
+    
+    // ─── Update Scene ──────────────────────────────────────────────────────────
+    
+    // Update hostel scene (windows, lamps, atmosphere)
+    if (this.hostelScene) {
+      this.hostelScene.update(deltaTime, this.smoothedProgress);
+    }
+    
+    // Update viewport cards
+    if (this.viewportCards) {
+      this.viewportCards.update(this.scene, elapsed * 1000);
     }
     
     // ─── Render ──────────────────────────────────────────────────────────────
@@ -613,6 +546,16 @@ export class WorldRuntime {
     
     // Dispose post-processing
     this.postProcessing.dispose();
+    
+    // Dispose hostel scene
+    if (this.hostelScene) {
+      this.hostelScene.dispose();
+    }
+    
+    // Dispose viewport cards
+    if (this.viewportCards) {
+      this.viewportCards.dispose();
+    }
     
     // Dispose scene
     this.scene.traverse((obj) => {
