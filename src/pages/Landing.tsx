@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Role } from '../shared/types';
 import { POLICY } from '../shared/policy';
 import { Button, Input } from '../components/ui';
 import { Building2, Users, Shield, BookOpen, AlertTriangle, CheckCircle, Clock, Star, ArrowRight, Send, ThumbsUp, FileText } from 'lucide-react';
+
+// Lazy load WorldCanvas for code splitting
+const WorldCanvas = React.lazy(() => import('../components/WorldCanvas').then(module => ({ default: module.WorldCanvas })));
 
 export default function Landing() {
   const [showLogin, setShowLogin] = useState<Role | null>(null);
@@ -14,9 +17,16 @@ export default function Landing() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--stone-50)]">
+    <div className="min-h-screen bg-[var(--stone-50)] relative">
+      {/* 3D World Background */}
+      <Suspense fallback={null}>
+        <WorldCanvas scene="landing" />
+      </Suspense>
+      
+      {/* Content overlay */}
+      <div className="relative z-10">
       {/* Header */}
-      <header className="border-b border-[var(--stone-200)] bg-white">
+      <header className="border-b border-[var(--stone-200)] bg-white/80 backdrop-blur-sm">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-[var(--accent-700)] rounded-xl flex items-center justify-center">
@@ -147,6 +157,7 @@ export default function Landing() {
           HMCS — Hostel Management Complaint System • Vivekananda Hostel, Block A • Timezone: {POLICY.defaultTimezone}
         </div>
       </footer>
+      </div>
     </div>
   );
 }
