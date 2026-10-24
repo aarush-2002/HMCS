@@ -1,276 +1,348 @@
-import React, { useState, Suspense } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { Role } from '../shared/types';
-import { POLICY } from '../shared/policy';
-import { Button, Input } from '../components/ui';
-import { Building2, Users, Shield, BookOpen, AlertTriangle, CheckCircle, Clock, Star, ArrowRight, Send, ThumbsUp, FileText } from 'lucide-react';
+import { useState, useEffect, lazy, Suspense } from 'react';
+import { AnimatePresence } from 'framer-motion';
+import { Preloader } from '../components/Preloader';
+import { Nav } from '../components/Nav';
+import { SideRail } from '../components/SideRail';
+import { ForegroundStages } from '../components/ForegroundStages';
+import { Atmosphere } from '../components/ui/Atmosphere';
+import { ArrowRight } from 'lucide-react';
 
-// Lazy load WorldCanvas for code splitting
-const WorldCanvas = React.lazy(() => import('../components/WorldCanvas').then(module => ({ default: module.WorldCanvas })));
+// Lazy load WorldCanvas
+const WorldCanvas = lazy(() => import('../components/WorldCanvas').then(m => ({ default: m.WorldCanvas })));
 
 export default function Landing() {
-  const [showLogin, setShowLogin] = useState<Role | null>(null);
-
-  if (showLogin) {
-    return <LoginPage role={showLogin} onBack={() => setShowLogin(null)} />;
-  }
+  const [loaded, setLoaded] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[var(--stone-50)] relative">
+    <div className="min-h-screen bg-ink text-bone relative overflow-x-clip">
+      {/* Preloader */}
+      <AnimatePresence>
+        {!loaded && <Preloader onComplete={() => setLoaded(true)} />}
+      </AnimatePresence>
+
       {/* 3D World Background */}
       <Suspense fallback={null}>
         <WorldCanvas scene="landing" />
       </Suspense>
-      
-      {/* Content overlay */}
-      <div className="relative z-10">
-      {/* Header */}
-      <header className="border-b border-[var(--stone-200)] bg-white/80 backdrop-blur-sm">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[var(--accent-700)] rounded-xl flex items-center justify-center">
-              <Building2 className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-[var(--stone-900)] font-heading tracking-tight">HMCS</h1>
-              <p className="text-[11px] text-[var(--stone-500)] -mt-0.5 tracking-wide uppercase">Hostel Complaint System</p>
-            </div>
-          </div>
-        </div>
-      </header>
 
-      {/* Hero */}
-      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
-        <div className="max-w-2xl">
-          <p className="text-sm font-medium text-[var(--accent-700)] mb-4 tracking-wide uppercase">Transparent • Accountable • Timely</p>
-          <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-[var(--stone-900)] font-heading leading-[1.1] mb-6">
-            Report issues.<br />
-            <span className="text-[var(--accent-700)]">Track resolutions.</span>
-          </h2>
-          <p className="text-lg text-[var(--stone-600)] leading-relaxed mb-10 max-w-xl">
-            A shared system for hostel residents to report problems, for wardens to prioritize and resolve them, and for students to confirm and rate the quality of resolution.
-          </p>
+      {/* Atmosphere layers */}
+      <Atmosphere />
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button size="lg" onClick={() => setShowLogin(Role.STUDENT)} icon={<Users className="w-5 h-5" />}>
-              Student Login
-            </Button>
-            <Button size="lg" variant="outline" onClick={() => setShowLogin(Role.WARDEN)} icon={<Shield className="w-5 h-5" />}>
-              Warden Login
-            </Button>
-          </div>
-        </div>
-      </section>
+      {/* Foreground stages */}
+      <ForegroundStages />
 
-      {/* How it works */}
-      <section className="max-w-5xl mx-auto px-4 sm:px-6 pb-20">
-        <h3 className="text-2xl font-bold text-[var(--stone-900)] font-heading mb-10">How it works</h3>
-        <div className="grid sm:grid-cols-3 gap-6">
-          {[
-            {
-              step: '01',
-              icon: <Send className="w-6 h-6" />,
-              title: 'Report',
-              desc: 'Submit a complaint with a title, description, category, and optional photo. Flag emergencies for 24h response.',
-            },
-            {
-              step: '02',
-              icon: <ThumbsUp className="w-6 h-6" />,
-              title: 'Support',
-              desc: 'Upvote complaints affecting you. Issues reaching 10 upvotes are automatically promoted to emergency priority.',
-            },
-            {
-              step: '03',
-              icon: <Star className="w-6 h-6" />,
-              title: 'Resolve & Rate',
-              desc: 'Confirm when an issue is fixed. Rate the warden\'s handling. Missed deadlines trigger accountability penalties.',
-            },
-          ].map(item => (
-            <div key={item.step} className="relative bg-white rounded-2xl border border-[var(--stone-200)] p-6">
-              <span className="text-xs font-bold text-[var(--accent-600)] tracking-wider">{item.step}</span>
-              <div className="w-12 h-12 bg-[var(--accent-50)] rounded-xl flex items-center justify-center text-[var(--accent-700)] mt-3 mb-4">
-                {item.icon}
+      {/* Navigation */}
+      <Nav />
+
+      {/* Side rail */}
+      <SideRail />
+
+      {/* Content */}
+      <div className="relative z-20">
+        {/* HERO */}
+        <section id="hero" className="min-h-screen flex items-center justify-center relative overflow-x-clip">
+          <div className="max-w-[1400px] mx-auto px-[var(--pad)] w-full grid md:grid-cols-2 gap-12 items-center">
+            {/* Left column */}
+            <div className="space-y-8">
+              <div className="eyebrow eyebrow-ember">● Chapter 00 — The Night Block</div>
+              
+              <h1 className="display display-xl">
+                <span className="block">Raise it. Back it.</span>
+                <span className="block text-ember">See it resolved.</span>
+              </h1>
+
+              <p className="body text-bone-dim max-w-md">
+                A transparent way for hostel residents to report problems, and for wardens to answer them on time.
+              </p>
+
+              {/* Chapter chips */}
+              <div className="flex flex-wrap gap-3">
+                {['01 Report', '02 Support', '03 Resolve', '04 Daybreak'].map((chip, idx) => (
+                  <a
+                    key={chip}
+                    href={`#chapter-0${idx + 1}`}
+                    className="px-4 py-2 rounded-full border border-line text-sm text-bone-dim hover:border-ember hover:text-ember transition-all"
+                  >
+                    {chip}
+                  </a>
+                ))}
               </div>
-              <h4 className="text-lg font-semibold text-[var(--stone-900)] font-heading mb-2">{item.title}</h4>
-              <p className="text-sm text-[var(--stone-600)] leading-relaxed">{item.desc}</p>
             </div>
-          ))}
-        </div>
-      </section>
 
-      {/* Policy */}
-      <section className="border-t border-[var(--stone-200)] bg-white">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-16">
-          <h3 className="text-2xl font-bold text-[var(--stone-900)] font-heading mb-8">Resolution Deadlines</h3>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div className="rounded-xl border border-[var(--stone-200)] p-6">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-[var(--stone-100)] rounded-lg flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-[var(--stone-600)]" />
+            {/* Right column */}
+            <div className="space-y-8">
+              {/* Hindi text */}
+              <div className="text-right">
+                <div className="text-6xl text-bone/20 devanagari" lang="hi">
+                  आवाज़
                 </div>
+              </div>
+
+              {/* Peek window */}
+              <a
+                href="#chapter-03"
+                className="block group relative aspect-video rounded-xl border border-line overflow-hidden hover:border-ember transition-all"
+              >
+                <div className="absolute inset-0 bg-ink-2 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="w-12 h-12 rounded-full bg-ember/20 flex items-center justify-center mx-auto mb-2 group-hover:bg-ember/30 transition-colors">
+                      <div className="w-0 h-0 border-l-[12px] border-l-ember border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent ml-1" />
+                    </div>
+                    <div className="text-xs text-bone-dim">Warden's window — 03:12</div>
+                  </div>
+                </div>
+              </a>
+            </div>
+          </div>
+
+          {/* Giant wordmark */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="text-[20vw] font-bold text-bone/5 tracking-widest">
+              HMCS
+            </div>
+          </div>
+        </section>
+
+        {/* CHAPTER 01 — REPORT */}
+        <section id="chapter-01" className="min-h-screen flex items-center py-32 relative overflow-x-clip">
+          <div className="max-w-[1400px] mx-auto px-[var(--pad)] w-full">
+            {/* Section head */}
+            <div className="flex items-center gap-4 mb-16">
+              <div className="text-sm text-ember">01 — The Gate</div>
+              <div className="flex-1 h-px bg-line" />
+              <div className="text-sm text-bone-dim devanagari" lang="hi">शिकायत</div>
+            </div>
+
+            {/* Three-column spread */}
+            <div className="grid md:grid-cols-3 gap-8 mb-16">
+              <div className="md:col-span-2">
+                <h2 className="display display-lg mb-8">
+                  A problem written down is a problem on the clock.
+                </h2>
+              </div>
+              <div className="space-y-6">
+                <p className="body text-bone-dim">
+                  <span className="text-bone font-medium">Every hostel has issues that get lost in corridors and chat groups.</span> HMCS gives each one a record, a priority and a deadline from the moment it is filed.
+                </p>
+                <p className="body-sm text-bone-dim">
+                  Add a title, a category and a photo. One normal complaint a day, one emergency a week, so every report stays meaningful.
+                </p>
+                <a
+                  href="#/student"
+                  className="inline-flex items-center gap-2 text-ember hover:gap-3 transition-all"
+                >
+                  File your first complaint <ArrowRight className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+
+            {/* Stats band */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { value: '72h', label: 'normal deadline' },
+                { value: '24h', label: 'emergency deadline' },
+                { value: '1/day', label: 'normal limit' },
+                { value: '1/week', label: 'emergency limit' },
+              ].map(stat => (
+                <div key={stat.label} className="p-6 rounded-xl border border-line bg-ink-2/50">
+                  <div className="text-3xl font-light text-ember tabular mb-2">{stat.value}</div>
+                  <div className="text-xs text-bone-dim uppercase tracking-wider">{stat.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* CHAPTER 02 — SUPPORT */}
+        <section id="chapter-02" className="min-h-screen flex items-center py-32 relative overflow-x-clip">
+          <div className="max-w-[1400px] mx-auto px-[var(--pad)] w-full">
+            {/* Section head */}
+            <div className="flex items-center gap-4 mb-16">
+              <div className="text-sm text-ember">02 — The Lit Windows</div>
+              <div className="flex-1 h-px bg-line" />
+              <div className="text-sm text-bone-dim devanagari" lang="hi">समर्थन</div>
+            </div>
+
+            {/* Mosaic */}
+            <div className="grid md:grid-cols-3 gap-6">
+              {/* Tall card */}
+              <div className="md:row-span-2 aspect-[3/4] md:aspect-auto rounded-xl border border-line bg-ink-2/50 p-8 flex flex-col justify-between group hover:border-ember transition-all">
                 <div>
-                  <p className="text-sm text-[var(--stone-500)]">Normal Complaints</p>
-                  <p className="text-2xl font-bold text-[var(--stone-900)] font-heading">{POLICY.normalDeadlineHours} hours</p>
+                  <div className="text-xs text-muted uppercase tracking-wider mb-2">Feed</div>
+                  <div className="text-sm text-bone-dim devanagari mb-4" lang="hi">फ़ीड</div>
+                  <h3 className="display display-md mb-4">Your hostel, one feed</h3>
+                  <p className="body-sm text-bone-dim">See every active complaint in your hostel, sorted by urgency.</p>
                 </div>
+                <div className="text-xs text-muted">Live view</div>
               </div>
-              <p className="text-sm text-[var(--stone-600)]">Standard issues like maintenance, cleanliness, or furniture. Limit: {POLICY.normalComplaintsPerDay} per student per day.</p>
-            </div>
-            <div className="rounded-xl border border-red-200 bg-red-50/50 p-6">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                  <AlertTriangle className="w-5 h-5 text-red-700" />
-                </div>
+
+              {/* Stacked cards */}
+              <div className="aspect-video rounded-xl border border-line bg-ink-2/50 p-6 flex flex-col justify-between group hover:border-ember transition-all">
                 <div>
-                  <p className="text-sm text-red-600">Emergency Complaints</p>
-                  <p className="text-2xl font-bold text-red-800 font-heading">{POLICY.emergencyDeadlineHours} hours</p>
+                  <div className="text-xs text-muted uppercase tracking-wider mb-2">Upvote</div>
+                  <div className="text-sm text-bone-dim devanagari mb-4" lang="hi">समर्थन</div>
+                  <h3 className="text-xl font-medium mb-2">Ten votes make it urgent</h3>
+                  <p className="body-sm text-bone-dim">When 10 students upvote, the complaint escalates to emergency.</p>
                 </div>
               </div>
-              <p className="text-sm text-red-700/80">Safety hazards, flooding, electrical dangers. Limit: {POLICY.emergencyComplaintsPerWeek} per student per week.</p>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
-            <div className="text-center p-4 rounded-xl bg-[var(--stone-50)]">
-              <p className="text-2xl font-bold text-[var(--accent-700)] font-heading">{POLICY.promotionThreshold}</p>
-              <p className="text-xs text-[var(--stone-500)] mt-1">Upvotes to promote</p>
-            </div>
-            <div className="text-center p-4 rounded-xl bg-[var(--stone-50)]">
-              <p className="text-2xl font-bold text-[var(--accent-700)] font-heading">{POLICY.resolutionVotesRequired}</p>
-              <p className="text-xs text-[var(--stone-500)] mt-1">Votes to confirm</p>
-            </div>
-            <div className="text-center p-4 rounded-xl bg-[var(--stone-50)]">
-              <p className="text-2xl font-bold text-[var(--accent-700)] font-heading">{POLICY.confirmationWindowHours}h</p>
-              <p className="text-xs text-[var(--stone-500)] mt-1">Confirmation window</p>
-            </div>
-            <div className="text-center p-4 rounded-xl bg-[var(--stone-50)]">
-              <p className="text-2xl font-bold text-[var(--accent-700)] font-heading">{POLICY.ratingMax}★</p>
-              <p className="text-xs text-[var(--stone-500)] mt-1">Max rating</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-[var(--stone-200)] bg-[var(--stone-50)]">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 text-center text-sm text-[var(--stone-500)]">
-          HMCS — Hostel Management Complaint System • Vivekananda Hostel, Block A • Timezone: {POLICY.defaultTimezone}
-        </div>
-      </footer>
-      </div>
-    </div>
-  );
-}
-
-// ─── Login Page ────────────────────────────────────────────────────────────────
-function LoginPage({ role, onBack }: { role: Role; onBack: () => void }) {
-  const { login } = useAuth();
-  const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const isStudent = role === Role.STUDENT;
-  const isWarden = role === Role.WARDEN;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    const result = login(email, password, role);
-    setLoading(false);
-    if (!result.success) {
-      setError(result.error || 'Login failed');
-    }
-  };
-
-  const fillDemo = (type: 'student' | 'warden' | 'admin') => {
-    if (type === 'student') { setEmail('student1@hmcs.edu'); setPassword('student123'); }
-    else if (type === 'warden') { setEmail('warden1@hmcs.edu'); setPassword('warden123'); }
-    else { setEmail('admin@hmcs.edu'); setPassword('admin123'); }
-    setError('');
-  };
-
-  return (
-    <div className="min-h-screen bg-[var(--stone-50)] flex flex-col">
-      <header className="border-b border-[var(--stone-200)] bg-white">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-3">
-          <button onClick={onBack} className="p-1.5 rounded-lg hover:bg-[var(--stone-100)] transition text-[var(--stone-600)]" aria-label="Go back">
-            <ArrowRight className="w-4 h-4 rotate-180" />
-          </button>
-          <div className="w-8 h-8 bg-[var(--accent-700)] rounded-lg flex items-center justify-center">
-            <Building2 className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-sm font-bold text-[var(--stone-900)] font-heading">HMCS</span>
-        </div>
-      </header>
-
-      <div className="flex-1 flex items-center justify-center p-4">
-        <div className="w-full max-w-sm">
-          <div className="bg-white rounded-2xl border border-[var(--stone-200)] p-6 sm:p-8">
-            <div className="text-center mb-6">
-              <div className={`w-14 h-14 rounded-xl mx-auto mb-4 flex items-center justify-center ${
-                isStudent ? 'bg-[var(--accent-50)]' : isWarden ? 'bg-amber-50' : 'bg-purple-50'
-              }`}>
-                {isStudent ? <Users className="w-7 h-7 text-[var(--accent-700)]" /> :
-                 isWarden ? <Shield className="w-7 h-7 text-amber-700" /> :
-                 <BookOpen className="w-7 h-7 text-purple-700" />}
+              <div className="aspect-video rounded-xl border border-line bg-ink-2/50 p-6 flex flex-col justify-between group hover:border-ember transition-all">
+                <div>
+                  <div className="text-xs text-muted uppercase tracking-wider mb-2">Emergency</div>
+                  <div className="text-sm text-bone-dim devanagari mb-4" lang="hi">आपात</div>
+                  <h3 className="text-xl font-medium mb-2">Promoted, not ignored</h3>
+                  <p className="body-sm text-bone-dim">Emergency complaints get a 24-hour deadline and priority attention.</p>
+                </div>
               </div>
-              <h2 className="text-xl font-bold text-[var(--stone-900)] font-heading">
-                {isStudent ? 'Student Login' : isWarden ? 'Warden Login' : 'Admin Login'}
+            </div>
+          </div>
+        </section>
+
+        {/* CHAPTER 03 — RESOLVE */}
+        <section id="chapter-03" className="min-h-screen flex items-center py-32 relative overflow-x-clip">
+          <div className="max-w-[1400px] mx-auto px-[var(--pad)] w-full">
+            {/* Section head */}
+            <div className="flex items-center gap-4 mb-16">
+              <div className="text-sm text-ember">03 — The Warden's Lamp</div>
+              <div className="flex-1 h-px bg-line" />
+              <div className="text-sm text-bone-dim devanagari" lang="hi">समाधान</div>
+            </div>
+
+            {/* Heading and body */}
+            <div className="mb-16 max-w-3xl">
+              <h2 className="display display-lg mb-6">
+                A deadline for every complaint. A witness for every fix.
               </h2>
-              <p className="text-sm text-[var(--stone-500)] mt-1">Sign in to access your dashboard</p>
+              <p className="body text-bone-dim">
+                Wardens see a prioritised queue. When a fix is reported, students confirm it. Three confirmations within 24 hours close the case, and the history stays forever.
+              </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <Input
-                label="Email"
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="you@hmcs.edu"
-                required
-                autoComplete="email"
-              />
-              <Input
-                label="Password"
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                autoComplete="current-password"
-              />
-
-              {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2.5 rounded-lg text-sm flex items-center gap-2" role="alert">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  {error}
+            {/* Atlas grid */}
+            <div className="grid md:grid-cols-5 gap-4">
+              {[
+                { num: '01', title: 'Submitted', desc: 'received with a deadline', time: 'within 72 h' },
+                { num: '02', title: 'Acknowledged', desc: 'a warden has seen it', time: 'within 24 h' },
+                { num: '03', title: 'In progress', desc: 'work has started', time: 'within 48 h' },
+                { num: '04', title: 'Marked resolved', desc: 'a 24-hour confirmation window opens', time: 'within 24 h' },
+                { num: '05', title: 'Confirmed', desc: 'three students agree, then rate', time: 'within 24 h' },
+              ].map((step, idx) => (
+                <div
+                  key={step.num}
+                  className={`rounded-xl border border-line bg-ink-2/50 p-6 flex flex-col justify-between ${
+                    idx < 2 ? 'md:col-span-2' : 'md:col-span-1'
+                  } aspect-video`}
+                >
+                  <div>
+                    <div className="text-3xl font-light text-ember tabular mb-2">{step.num}</div>
+                    <h3 className="text-lg font-medium mb-2">{step.title}</h3>
+                    <p className="body-sm text-bone-dim">{step.desc}</p>
+                  </div>
+                  <div className="text-xs text-muted mt-4">{step.time}</div>
                 </div>
-              )}
-
-              <Button type="submit" className="w-full" loading={loading}>
-                Sign In
-              </Button>
-            </form>
-
-            <div className="mt-6 pt-5 border-t border-[var(--stone-100)]">
-              <p className="text-xs text-[var(--stone-500)] mb-2">Demo credentials (click to fill):</p>
-              <div className="flex flex-wrap gap-2">
-                <button onClick={() => fillDemo('student')} className="text-xs bg-[var(--accent-50)] text-[var(--accent-800)] px-2.5 py-1.5 rounded-lg hover:bg-[var(--accent-100)] transition font-medium">
-                  student1@hmcs.edu
-                </button>
-                <button onClick={() => fillDemo('warden')} className="text-xs bg-amber-50 text-amber-800 px-2.5 py-1.5 rounded-lg hover:bg-amber-100 transition font-medium">
-                  warden1@hmcs.edu
-                </button>
-                <button onClick={() => fillDemo('admin')} className="text-xs bg-purple-50 text-purple-800 px-2.5 py-1.5 rounded-lg hover:bg-purple-100 transition font-medium">
-                  admin@hmcs.edu
-                </button>
-              </div>
+              ))}
             </div>
           </div>
-        </div>
+        </section>
+
+        {/* CHAPTER 04 — DAYBREAK */}
+        <section id="chapter-04" className="min-h-screen flex items-center py-32 relative overflow-x-clip">
+          <div className="max-w-[1400px] mx-auto px-[var(--pad)] w-full grid md:grid-cols-2 gap-12 items-center">
+            {/* Left column */}
+            <div className="space-y-8">
+              <div className="eyebrow eyebrow-ember">Chapter 04 — Daybreak</div>
+
+              <p className="body text-bone-dim max-w-md">
+                Ratings are out of three stars. Missed deadlines are recorded as separate, traceable events. Nothing is quietly deleted.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-4">
+                <a
+                  href="#/student"
+                  className="inline-flex items-center justify-center px-8 py-4 bg-ember text-ink rounded-full text-base font-medium hover:bg-ember/90 transition-colors"
+                >
+                  Open the student portal
+                </a>
+                <a
+                  href="#/warden"
+                  className="inline-flex items-center justify-center px-6 py-3 text-sm text-bone-dim hover:text-ember transition-colors"
+                >
+                  Warden login
+                </a>
+              </div>
+            </div>
+
+            {/* Right column — vertical text on desktop */}
+            <div className="hidden md:flex items-center justify-center">
+              <h2 className="display display-xl text-bone/20" style={{ writingMode: 'vertical-rl' }}>
+                Resolved by morning.
+              </h2>
+            </div>
+
+            {/* Mobile — horizontal */}
+            <div className="md:hidden">
+              <h2 className="display display-lg text-bone/20">
+                Resolved by morning.
+              </h2>
+            </div>
+          </div>
+        </section>
+
+        {/* FOOTER */}
+        <footer className="py-32 border-t border-line relative overflow-x-clip">
+          <div className="max-w-[1400px] mx-auto px-[var(--pad)]">
+            {/* Brand statement */}
+            <div className="mb-16 text-center">
+              <div className="inline-flex items-center gap-4 mb-8">
+                <svg width="48" height="48" viewBox="0 0 64 64" className="text-bone">
+                  <rect x="4" y="4" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2" />
+                  <rect x="34" y="4" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2" />
+                  <rect x="4" y="34" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2" />
+                  <rect x="34" y="34" width="26" height="26" fill="var(--ember)" stroke="currentColor" strokeWidth="2" />
+                </svg>
+              </div>
+              <p className="display display-md max-w-2xl mx-auto">
+                A hostel works best when every voice has a witness.
+              </p>
+            </div>
+
+            {/* Three columns */}
+            <div className="grid md:grid-cols-3 gap-12 mb-16">
+              <div>
+                <h3 className="text-sm font-medium text-bone mb-4 uppercase tracking-wider">Portal</h3>
+                <ul className="space-y-2">
+                  <li><a href="#/student" className="text-sm text-bone-dim hover:text-ember transition-colors">Student login</a></li>
+                  <li><a href="#/warden" className="text-sm text-bone-dim hover:text-ember transition-colors">Warden login</a></li>
+                  <li><a href="#/admin" className="text-sm text-bone-dim hover:text-ember transition-colors">Admin sign-in</a></li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-bone mb-4 uppercase tracking-wider">How it works</h3>
+                <ul className="space-y-2">
+                  <li><a href="#chapter-01" className="text-sm text-bone-dim hover:text-ember transition-colors">Report</a></li>
+                  <li><a href="#chapter-02" className="text-sm text-bone-dim hover:text-ember transition-colors">Support</a></li>
+                  <li><a href="#chapter-03" className="text-sm text-bone-dim hover:text-ember transition-colors">Resolve</a></li>
+                  <li><a href="#chapter-04" className="text-sm text-bone-dim hover:text-ember transition-colors">Daybreak</a></li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-bone mb-4 uppercase tracking-wider">Policy</h3>
+                <ul className="space-y-2">
+                  <li><a href="#" className="text-sm text-bone-dim hover:text-ember transition-colors">Limits and deadlines</a></li>
+                  <li><a href="#" className="text-sm text-bone-dim hover:text-ember transition-colors">Privacy</a></li>
+                  <li><a href="#" className="text-sm text-bone-dim hover:text-ember transition-colors">Photo rules</a></li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Base row */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 pt-8 border-t border-line">
+              <div className="text-xs text-muted">© 2026 HMCS</div>
+              <div className="text-lg text-bone-dim devanagari" lang="hi">आवाज़</div>
+              <div className="text-xs text-muted">Built for hostel life</div>
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   );
