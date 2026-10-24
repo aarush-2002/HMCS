@@ -252,7 +252,28 @@ export class WorldRuntime {
   }
   
   private initCameraRig(): void {
-    // Define waypoints for 6 chapters (site plan: hostel at z=-40, gate at z=-8)
+    // Auth scene: slow orbit, no scroll rig
+    if (this.sceneType === 'auth') {
+      // Student login: frame gate and notice board
+      // Warden login: frame warden's window (warmer, closer)
+      const isStudent = this.variant !== 'warden';
+      
+      if (isStudent) {
+        // Gate and notice board at z=-8
+        this.camera.position.set(-6, 2.5, -3);
+        this.camera.lookAt(new THREE.Vector3(0, 2, -8));
+      } else {
+        // Warden's window at ground floor, closer and warmer
+        this.camera.position.set(8, 3, -36);
+        this.camera.lookAt(new THREE.Vector3(-2, 3, -40));
+      }
+      
+      this.camera.fov = 50;
+      this.camera.updateProjectionMatrix();
+      return;
+    }
+    
+    // Landing scene: waypoints for 6 chapters
     this.waypoints = [
       // 0 Hero: wide and slightly low, whole block, moon over the water tank
       { position: new THREE.Vector3(0, 3, 5), lookAt: new THREE.Vector3(0, 7, -40), fov: 55, anchor: 0 },
