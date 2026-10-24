@@ -23,6 +23,7 @@ export type SceneType = 'landing' | 'auth';
 export interface WorldRuntimeOptions {
   container: HTMLElement;
   scene: SceneType;
+  variant?: 'student' | 'warden';
   quality?: 'high' | 'low';
   postProcessing?: boolean;
 }
@@ -91,6 +92,7 @@ class PerformanceGovernor {
 export class WorldRuntime {
   private container: HTMLElement;
   private sceneType: SceneType;
+  private variant?: 'student' | 'warden';
   
   private renderer!: THREE.WebGLRenderer;
   private scene!: THREE.Scene;
@@ -139,6 +141,7 @@ export class WorldRuntime {
   constructor(options: WorldRuntimeOptions) {
     this.container = options.container;
     this.sceneType = options.scene;
+    this.variant = options.variant;
     
     const isLowQuality = options.quality === 'low' || this.isCoarsePointer();
     const postEnabled = options.postProcessing !== false && this.getQueryParam('post') !== '0';
@@ -416,8 +419,43 @@ export class WorldRuntime {
     const deltaTime = (now - this.lastFrameTime) / 1000;
     this.lastFrameTime = now;
     
+    // ─── Auth Scene: Orbit Camera ──────────────────────────────────────────────
+    if (this.sceneType === 'auth') {
+      // Slow orbit camera for auth pages
+      const orbitSpeed = 0.05; // radians per second
+      const orbitRadius = 15;
+      const orbitHeight = 3;
+      
+      let targetPos: THREE.Vector3;
+      let lookAtPos: THREE.Vector3;
+      
+      if (this.variant === 'student') {
+        // Student login: frame gate and notice board
+        const angle = elapsed * orbitSpeed;
+        targetPos = new THREE.Vector3(
+          Math.sin(angle) * orbitRadius,
+          orbitHeight,
+          Math.cos(angle) * orbitRadius - 8
+        );
+        lookAtPos = new THREE.Vector3(0, 2, -8); // Gate position
+      } else {
+        // Warden login: frame warden's window, warmer and closer
+        const angle = elapsed * orbitSpeed;
+        targetPos = new THREE.Vector3(
+          Math.sin(angle) * (orbitRadius * 0.7),
+          orbitHeight * 0.8,
+          Math.cos(angle) * (orbitRadius * 0.7) - 38
+        );
+        lookAtPos = new THREE.Vector3(-5, 3, -40); // Warden's window
+      }
+      
+      this.camera.position.copy(targetPos);
+      this.camera.lookAt(lookAtPos);
+      this.camera.fov = 50;
+      this.camera.updateProjectionMatrix();
+    }
     // ─── Opening Dolly ───────────────────────────────────────────────────────
-    if (!this.dollyComplete) {
+    else if (!this.dollyComplete) {
       const dollyProgress = Math.min(1, (now - this.dollyStartTime) / (this.dollyDuration * 1000));
       const eased = this.easeOutCubic(dollyProgress);
       

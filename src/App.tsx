@@ -7,6 +7,8 @@ import { AlertTriangle, Building2, ShieldX } from 'lucide-react';
 
 // Lazy-loaded routes
 const Landing = lazy(() => import('./pages/Landing'));
+const StudentLogin = lazy(() => import('./pages/StudentLogin'));
+const WardenLogin = lazy(() => import('./pages/WardenLogin'));
 const StudentDashboard = lazy(() => import('./pages/StudentDashboard'));
 const WardenDashboard = lazy(() => import('./pages/WardenDashboard'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
@@ -114,9 +116,11 @@ function AppRoutes() {
             user.role === Role.ADMIN ? '/admin' : '/student'
           } replace /> : <Landing />
         } />
+        <Route path="/student/login" element={<StudentLogin />} />
         <Route path="/student" element={
           <ProtectedRoute requiredRole={Role.STUDENT}><StudentDashboard /></ProtectedRoute>
         } />
+        <Route path="/warden/login" element={<WardenLogin />} />
         <Route path="/warden" element={
           <ProtectedRoute requiredRole={Role.WARDEN}><WardenDashboard /></ProtectedRoute>
         } />

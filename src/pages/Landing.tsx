@@ -311,8 +311,8 @@ export default function Landing() {
               <div>
                 <h3 className="text-sm font-medium text-bone mb-4 uppercase tracking-wider">Portal</h3>
                 <ul className="space-y-2">
-                  <li><a href="#/student" className="text-sm text-bone-dim hover:text-ember transition-colors">Student login</a></li>
-                  <li><a href="#/warden" className="text-sm text-bone-dim hover:text-ember transition-colors">Warden login</a></li>
+                  <li><a href="#/student/login" className="text-sm text-bone-dim hover:text-ember transition-colors">Student login</a></li>
+                  <li><a href="#/warden/login" className="text-sm text-bone-dim hover:text-ember transition-colors">Warden login</a></li>
                   <li><a href="#/admin" className="text-sm text-bone-dim hover:text-ember transition-colors">Admin sign-in</a></li>
                 </ul>
               </div>

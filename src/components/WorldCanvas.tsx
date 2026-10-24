@@ -9,10 +9,11 @@ import type { SceneType } from '../world';
 
 interface WorldCanvasProps {
   scene: SceneType;
+  variant?: 'student' | 'warden';
   className?: string;
 }
 
-export function WorldCanvas({ scene, className = '' }: WorldCanvasProps) {
+export function WorldCanvas({ scene, variant, className = '' }: WorldCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<WorldRuntime | null>(null);
   const [webglSupported, setWebglSupported] = useState(true);
@@ -39,6 +40,7 @@ export function WorldCanvas({ scene, className = '' }: WorldCanvasProps) {
       runtimeRef.current = new WorldRuntime({
         container,
         scene,
+        variant,
         quality,
         postProcessing,
       });
